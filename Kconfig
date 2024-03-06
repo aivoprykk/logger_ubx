@@ -1,0 +1,44 @@
+menu "Ublox GPS Module Configuration"
+    comment "Ublox GPS Module configuration options"
+    config UBX_UART_PORT
+            int "GPS Uart port number"
+            default 2 if HAS_BOARD_LILYGO_T_DISPLAY_S3
+            default 1
+            help
+            Specify the Port Pin for GPS UART.
+    menu "Ublox GPS Uart pins"
+    comment "GPS send and transmit pin configuration"
+        config UBX_UART_RXD
+            int "GPS Uart Rxd"
+            default 18 if HAS_BOARD_LILYGO_T_DISPLAY_S3
+            default 32
+            help
+            Specify the Recieve Pin for GPS UART.
+        config UBX_UART_TXD
+            int "GPS Uart Txd"
+            default 17 if HAS_BOARD_LILYGO_T_DISPLAY_S3
+            default 33
+            help
+            Specify the transmit pin for GPS UART.
+    endmenu
+    menu "GPS Power pin(s)"
+        config UBX_UART_PWR_1
+            int "GPS main power pin"
+            default 21 if HAS_BOARD_LILYGO_T_DISPLAY_S3
+            default 25
+            help
+            Specify the power pin for GPS UART.
+        config UBX_UART_PWR_2
+            int "GPS secondary power pin"
+            default 16 if HAS_BOARD_LILYGO_T_DISPLAY_S3
+            default 26
+            help
+            Specify the power pin 2 for GPS UART: needed for esp32 as one pin could transfer 50ma power.
+        config UBX_UART_PWR_3
+            int "GPS 2. secondary power pin"
+            default 44 if HAS_BOARD_LILYGO_T_DISPLAY_S3
+            default 27
+            help
+            Specify the power pin 3 for GPS UART: needed for esp32 as one pin could transfer 50ma power.
+    endmenu
+endmenu
