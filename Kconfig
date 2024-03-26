@@ -35,8 +35,8 @@ menu "Ublox GPS Module Configuration"
             help
             Specify the power pin 2 for GPS UART: needed for esp32 as one pin could transfer 50ma power.
         config UBLOX_UART_PWR_3
-            depends on HAS_BOARD_LILYGO_EPAPER_T5
             int "GPS 2. secondary power pin"
+            default -1 if HAS_BOARD_LILYGO_T_DISPLAY_S3
             default 27
             help
             Specify the power pin 3 for GPS UART: needed for esp32 as one pin could transfer 50ma power.
