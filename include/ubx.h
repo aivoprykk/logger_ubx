@@ -2,7 +2,7 @@
 #define E8FD891D_3201_47A6_94CA_E3060D52E3AD
 
 /*
- * @brief This is a library for the uBlox GPS
+ * @brief This implementation is based on a library for the uBlox GPS
  * @see https://github.com/aedalzotto/esp32-ublox.git
  *
  */
@@ -135,7 +135,7 @@ typedef enum ubx_message_e {
 } ubx_message_t;
 
 typedef enum ubx_msg_type_e {
-    MT_NONE,
+    MT_NONE=(uint8_t)0,
     MT_NAV_DUMMY,
     MT_NAV_PVT,
     MT_NAV_ACK,
@@ -178,17 +178,21 @@ typedef struct ubx_rtc_config_s {
  */
 typedef struct ubx_config_s {
     uart_port_t uart_num;
-    uart_port_t tx_pin;
-    uart_port_t rx_pin;
-    uart_port_t en_pins[4];
+    gpio_num_t tx_pin;
+    gpio_num_t rx_pin;
+    gpio_num_t en_pins[4];
     uart_config_t uart_conf;
     ubx_rtc_config_t * rtc_conf;
     ubx_msg_t ubx_msg;
     char Ublox_type[20];
     bool uart_setup_ok;
     bool config_ok;
-    bool setup_ok;
+    bool ready;
     bool time_set;
+    bool signal_ok;
+    uint16_t first_fix;
+    uint32_t next_time_sync;
+    uint32_t ready_time;
 } ubx_config_t;
 
 /**
@@ -212,8 +216,40 @@ typedef struct ubx_config_s {
     .Ublox_type = "Ublox unknown...", \
     .uart_setup_ok = false,                           \
     .config_ok = false,                               \
-    .setup_ok = false,                                \
+    .ready = false,                                \
     .time_set = false,                                \
+    .next_time_sync = 0,                              \
+    .ready_time = 0,                                    \
+}
+
+struct ubx_msg_byte_ctx_s;
+
+typedef esp_err_t (*ubx_handler_cb)(struct ubx_msg_byte_ctx_s*);
+
+typedef struct ubx_msg_byte_ctx_s {
+    uint8_t * msg;
+    uint16_t msg_size;
+    uint16_t msg_len;
+    uint16_t msg_pos;
+    bool msg_match_to_pos;
+    bool expect_ubx_msg;
+    uint8_t ubx_msg_type;
+    ubx_handler_cb msg_type_handler;
+    ubx_handler_cb msg_ready_handler;
+    ubx_config_t * ubx;
+} ubx_msg_byte_ctx_t;
+
+#define UBX_MSG_BYTE_CTX_DEFAULT() { \
+    .msg = &(ubx->ubx_msg.none[0]),                     \
+    .msg_size = UBX_NONE_SIZE,                    \
+    .msg_len = 0,                    \
+    .msg_pos = 2,                    \
+    .msg_match_to_pos = true,       \
+    .expect_ubx_msg = true,       \
+    .ubx_msg_type = 0,               \
+    .msg_type_handler = ubx_msg_type_handler,        \
+    .msg_ready_handler = NULL,       \
+    .ubx = ubx,                     \
 }
 
 /**
@@ -390,21 +426,32 @@ esp_err_t ubx_set_ubxout(ubx_config_t *ubx);
  * @param *ubx is the address of the GPS configuration structure.
  * @param *arg is the address of the message handler.
  * 
- * @return
- * current message type
+    * @return
+    *  - ESP_OK                Success
+    * - ESP_FAIL              Not all bytes sent
+    * - ESP_FAIL              Parameter error
+    * - ESP_ERR_TIMEOUT       Not all bytes read
+    * - ESP_ERR_TIMEOUT       No ACK received within ACK_TIMEOUT
+    * - ESP_INVALID_RESPONSE  NAK received
+    * - ESP_ERR_INVALID_CRC   Checksum for the wrong message received
+    * - ESP_ERR_INVALID_ARG   Invalid rate parameter
 */
-uint8_t ubx_msg_handler(ubx_config_t *ubx, void * arg);
+esp_err_t ubx_msg_handler(ubx_msg_byte_ctx_t *);
+esp_err_t ubx_msg_type_handler(ubx_msg_byte_ctx_t * mctx);
+esp_err_t ubx_msg_checksum_handler(ubx_msg_byte_ctx_t * mctx);
+esp_err_t ubx_msg_byte_ctx_reset(ubx_msg_byte_ctx_t * mctx);
 
 int8_t ubx_set_time(ubx_config_t *ubx, float time_offset);
 
 esp_err_t ubx_setup(ubx_config_t *ubx);
 
-const char * ubx_chip_str(ubx_config_t *ubx);
+const char * ubx_chip_str(const ubx_config_t *ubx);
 
-const char * ubx_baud_str(ubx_config_t *ubx);
+const char * ubx_baud_str(const ubx_config_t *ubx);
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* E8FD891D_3201_47A6_94CA_E3060D52E3AD */
+// Path: components/logger_ubx/include/ubx_msg.h

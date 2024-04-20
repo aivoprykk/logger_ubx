@@ -9,8 +9,8 @@
 extern "C" {
 #endif
 
-/*!< Timeout for the ACK message */
-#define ACK_TIMEOUT 1500
+/*!< Timeout for the ubx message */
+#define MSG_READ_TIMEOUT 1500
 
 /*!< UBX Protocol headers */
 #define UBX_HDR_A 0xB5
@@ -18,6 +18,7 @@ extern "C" {
 #define UBX_HDR {UBX_HDR_A, UBX_HDR_B}
 
 /*!< UBX Message classes */
+#define CLS_NONE 0x00
 #define CLS_NAV  0x01
 #define CLS_INF  0x04
 #define CLS_ACK  0x05
@@ -26,12 +27,14 @@ extern "C" {
 #define CLS_SEC  0x27
 #define CLS_MON  0x0A
 
+/*!< None Message IDs */
+#define NONE_NONE 0x00
+
 /*!< ACK Message IDs */
 #define ACK_ACK 0x01
 #define ACK_NAK 0x00
 
 /*!< NAV Message IDs */
-#define NAV_DUMMY 0x00
 #define NAV_DOP 0x04
 #define NAV_PVT 0x07
 #define NAV_CLK 0x22
@@ -98,14 +101,17 @@ void hex_string_to_uint8_t(const char* hex_string, uint8_t* output, size_t outpu
 
 esp_err_t ubx_cfg_send_m(ubx_config_t *ubx, uint8_t * msg, size_t msg_len, bool need_ack);
 esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx, uint8_t cls, uint8_t id, uint8_t * payload, size_t payload_len, bool need_ack);
-esp_err_t ubx_cfg_valset(ubx_config_t *ubx, uint8_t * cfg, size_t payload_len);
-esp_err_t ubx_cfg_get(ubx_config_t *ubx, uint8_t cls, uint8_t id, uint8_t *msg, size_t msg_len);
+esp_err_t ubx_cfg_valset(ubx_config_t *ubx, uint8_t * cfg, size_t payload_len, bool need_ack);
+esp_err_t ubx_cfg_get(ubx_msg_byte_ctx_t * mctx);
 esp_err_t ubx_uart_set_baud(ubx_config_t *ubx);
 esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, uint32_t baud);
 
-esp_err_t write_ubx_msg(ubx_config_t *ubx, uint8_t *msg, size_t msg_len, bool need_checksum);
-esp_err_t read_ubx_msg(ubx_config_t *ubx, uint8_t *msg, size_t msg_len, bool verify_ubx_header);
+void decode_uint16(const uint8_t* hex_string, uint16_t *output);
 
+esp_err_t write_ubx_msg(const ubx_config_t *ubx, uint8_t *msg, size_t msg_len, bool need_checksum);
+
+esp_err_t read_ubx_msg(ubx_msg_byte_ctx_t * mctx);
+void print_ubx_msg(ubx_msg_byte_ctx_t * mctx);
 /**
  * @brief Gets the acknowledge of configuration message.
  * 

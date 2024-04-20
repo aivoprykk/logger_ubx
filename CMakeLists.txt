@@ -1,7 +1,8 @@
-
+SET(SRCS ubx.c ubx_msg_handler.c)
+SET(INCS include)
 idf_component_register(
-    SRCS ubx.c
-    INCLUDE_DIRS "include"
+    SRCS ${SRCS}
+    INCLUDE_DIRS ${INCS}
     REQUIRES driver esp_event
-    PRIV_REQUIRES logger_common
+    PRIV_REQUIRES logger_common logger_str
 )

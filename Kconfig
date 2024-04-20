@@ -1,5 +1,4 @@
-menu "Ublox GPS Module Configuration"
-    comment "Ublox GPS Module configuration options"
+menu "Logger Ublox GPS Module Configuration"
     config UBLOX_UART_PORT
             int "GPS Uart port number"
             default 2 if HAS_BOARD_LILYGO_T_DISPLAY_S3
