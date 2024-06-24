@@ -18,6 +18,8 @@
 
 ESP_EVENT_DEFINE_BASE(UBX_EVENT);
 
+TIMER_INIT
+
 static const char *TAG = "ublox";
 SemaphoreHandle_t xMutex;
 RTC_DATA_ATTR ubx_rtc_config_t rtc_config = UBX_RTC_DEFAULT_CONFIG();
@@ -451,7 +453,7 @@ esp_err_t ubx_cfg_get(ubx_msg_byte_ctx_t * mctx) {
 
 esp_err_t ubx_set_nav_mode(ubx_config_t *ubx, ubx_nav_mode_t nav_mode) {
     LOGR
-    uint8_t msg[] = {
+    const uint8_t msg[] = {
         /* mask */ 0xFF, 0xFF,
         nav_mode, /* auto 2D-3D */ 0x03,
         /* fixedAlt */ 0x00, 0x00, 0x00, 0x00,

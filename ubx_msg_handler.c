@@ -1,6 +1,8 @@
 #include <sys/time.h>
+#include <stdint.h>
 
 #include "esp_err.h"
+#include "esp_log.h"
 
 #include "ubx_events.h"
 #include "logger_common.h"
@@ -394,14 +396,14 @@ int8_t ubx_set_time(ubx_config_t *ubx, float time_offset) {
     my_time.tm_year = pvt->year - 1900;  // mktime needs years since 1900, so deduct 1900
     unix_timestamp = mktime(&my_time);                // mktime returns local time, so TZ is important !!!
     int64_t utc_ms = unix_timestamp * 1000LL + (pvt->nano + 500000) / 1000000LL;
-    ESP_LOGI(TAG, "GPS raw time: %d-%02d-%02d %02d:%02d:%02d %" PRId64, pvt->year, pvt->month, pvt->day, pvt->hour, pvt->minute, pvt->second, utc_ms);
+    ESP_LOGW(TAG, "GPS raw time: %d-%02d-%02d %02d:%02d:%02d %" PRId64, pvt->year, pvt->month, pvt->day, pvt->hour, pvt->minute, pvt->second, utc_ms);
     struct timeval tv = {
         .tv_sec = (time_t)(unix_timestamp + (time_offset * 3600)),
         .tv_usec = 0};  // clean utc time !!
     settimeofday(&tv, NULL);
     struct tm tms;
     localtime_r(&unix_timestamp, &tms);
-    ESP_LOGI(TAG, "GPS time set: %d-%02d-%02d %02d:%02d:%02d", (tms.tm_year) + 1900, (tms.tm_mon) + 1, tms.tm_mday, tms.tm_hour, tms.tm_min, tms.tm_sec);
+    ESP_LOGW(TAG, "GPS time set: %d-%02d-%02d %02d:%02d:%02d", (tms.tm_year) + 1900, (tms.tm_mon) + 1, tms.tm_mday, tms.tm_hour, tms.tm_min, tms.tm_sec);
     if (tms.tm_year < 123) {
         ESP_LOGW(TAG, "GPS Reported year not plausible (<2023)!");
         return 0;
