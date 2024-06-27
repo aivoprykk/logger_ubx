@@ -23,6 +23,8 @@ enum {
     UBX_EVENT_MSG_RECIEVED,
 };
 
+ extern const char * ubx_event_strings[];
+
 #ifdef __cplusplus
 }
 #endif

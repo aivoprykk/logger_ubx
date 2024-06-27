@@ -18,6 +18,18 @@
 
 ESP_EVENT_DEFINE_BASE(UBX_EVENT);
 
+const char * ubx_event_strings[] = {
+    "UBX_EVENT_DATETIME_SET",
+    "UBX_EVENT_PINS_INIT_DONE",
+    "UBX_EVENT_PINS_INIT_FAIL",
+    "UBX_EVENT_UART_DEINIT_DONE",
+    "UBX_EVENT_UART_INIT_DONE",
+    "UBX_EVENT_UART_INIT_FAIL",
+    "UBX_EVENT_SETUP_DONE",
+    "UBX_EVENT_SETUP_FAIL",
+    "UBX_EVENT_MSG_RECIEVED",
+};
+
 TIMER_INIT
 
 static const char *TAG = "ublox";
@@ -304,6 +316,8 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
         ret = ubx_set_uart_out_rate(ubx);
         if(ret == ESP_OK)
             break;
+        else
+            delay_ms(50);
     }
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_set_uart_out_rate failed", __FUNCTION__);
