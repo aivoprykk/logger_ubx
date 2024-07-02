@@ -138,6 +138,7 @@ esp_err_t ubx_pins_deinit(ubx_config_t *ubx) {
 }
 
 esp_err_t ubx_uart_init(ubx_config_t *ubx) {
+    xSemaphoreTake(xMutex, portMAX_DELAY);
     if (ubx == NULL)
         return ESP_ERR_INVALID_ARG;
     if(ubx->uart_setup_ok)
@@ -185,6 +186,7 @@ esp_err_t ubx_uart_init(ubx_config_t *ubx) {
         ESP_LOGW(TAG, "[%s] uart_driver_install done", __FUNCTION__);
         ubx->uart_setup_ok = true;
     }
+    xSemaphoreGive(xMutex);
     delay_ms(50);
     return ret;
 }
@@ -200,7 +202,6 @@ esp_err_t ubx_uart_deinit(ubx_config_t *ubx) {
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] uart_driver_delete failed", __FUNCTION__);
     }
-    xSemaphoreGive(xMutex);
 
     ret = ubx_pins_deinit(ubx);
     if (ret != ESP_OK) {
@@ -210,6 +211,7 @@ esp_err_t ubx_uart_deinit(ubx_config_t *ubx) {
         ESP_ERROR_CHECK(esp_event_post(UBX_EVENT, UBX_EVENT_UART_DEINIT_DONE, NULL,0, portMAX_DELAY));
         ubx->uart_setup_ok = false;
     }
+    xSemaphoreGive(xMutex);
     return ret;
 }
 
@@ -241,6 +243,7 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
         return ESP_OK;
     TIMER_S    
     esp_err_t ret = ubx_on(ubx);
+    if(xSemaphoreTake(xMutex, portMAX_DELAY) == pdTRUE) {
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_on failed", __FUNCTION__);
         goto done;
@@ -349,6 +352,8 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
     if(!ret){
         ubx->ready = true;
         ubx->ready_time = get_millis();
+    }
+    xSemaphoreGive(xMutex);
     }
     TIMER_E
     return ret;
