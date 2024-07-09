@@ -40,4 +40,30 @@ menu "Logger Ublox GPS Module Configuration"
             help
             Specify the power pin 3 for GPS UART: needed for esp32 as one pin could transfer 50ma power.
     endmenu
+    choice
+        bool "Default log verbosity"
+        default UBLOX_LOG_LEVEL_WARN
+        help
+            Specify how important log should be added.
+        config UBLOX_LOG_LEVEL_TRACE
+            bool "A lot of logs to give detailed information"
+        config UBLOX_LOG_LEVEL_INFO
+            bool "Log important events"
+        config UBLOX_LOG_LEVEL_WARN
+            bool "Log if something unwanted happened but didn't cause a problem"
+        config UBLOX_LOG_LEVEL_ERROR
+            bool "Only critical issues, when the system may fail"
+        config UBLOX_LOG_LEVEL_USER
+            bool "Only logs added by the user"
+        config UBLOX_LOG_LEVEL_NONE
+            bool "Do not log anything"
+    endchoice
+    config UBLOX_LOG_LEVEL
+        int
+        default 0 if UBLOX_LOG_LEVEL_TRACE
+        default 1 if UBLOX_LOG_LEVEL_INFO
+        default 2 if UBLOX_LOG_LEVEL_WARN
+        default 3 if UBLOX_LOG_LEVEL_ERROR
+        default 4 if UBLOX_LOG_LEVEL_USER
+        default 5 if UBLOX_LOG_LEVEL_NONE
 endmenu

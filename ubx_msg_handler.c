@@ -5,10 +5,10 @@
 #include "esp_log.h"
 
 #include "ubx_events.h"
-#include "logger_common.h"
 #include "ubx_private.h"
 #include "ubx.h"
 #include "ubx_msg.h"
+#include "logger_common.h"
 
 #define LOG_MSG_BITS 0
 #define LOG_MSG_JSON 0
@@ -572,7 +572,7 @@ void print_ubx_msg(ubx_msg_byte_ctx_t * mctx) {
 }
 
 esp_err_t ack_status(ubx_config_t *ubx, uint8_t cls_id, uint8_t msg_id) {
-    LOGR
+    DLOG(TAG, "[%s]", __func__);
     esp_err_t ret = ESP_OK;
     ubx->ubx_msg.navAck.msg_cls = cls_id;
     ubx->ubx_msg.navAck.msg_id = msg_id;
