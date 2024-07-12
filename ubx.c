@@ -190,7 +190,7 @@ esp_err_t ubx_uart_init(ubx_config_t *ubx) {
         }
         xSemaphoreGive(xMutex);
     }
-    delay_ms(50);
+    delay_ms(100);
     return ret;
 }
 
@@ -329,7 +329,7 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
         if(ret == ESP_OK)
             break;
         else
-            delay_ms(50);
+            delay_ms(100);
     }
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_set_uart_out_rate failed", __FUNCTION__);
@@ -340,6 +340,7 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
         ret = ubx_get_hw_id(ubx);
         if(ret == ESP_OK)
             break;
+        delay_ms(100);
     }
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_get_hw_id failed", __FUNCTION__);
@@ -424,7 +425,7 @@ esp_err_t ubx_cfg_send_m(ubx_config_t *ubx, uint8_t * msg, size_t msg_len, bool 
             ESP_LOGE(TAG, "[%s] write_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
             goto done;
         }
-        delay_ms(50);
+        delay_ms(100);
         if(need_ack) 
             ret = ack_status(ubx, *(msg+2), *(msg+3));
     done:
@@ -449,7 +450,6 @@ esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx, uint8_t cls, uint8_t id, uint8_t *
     esp_err_t ret = ubx_cfg_send_m(ubx, msg, total_len, need_ack);
     if(len)
         free(msg);
-    delay_ms(50);
     return ret;
 }
 
@@ -748,7 +748,7 @@ esp_err_t ubx_uart_set_baud(ubx_config_t *ubx) {
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] uart_set_baudrate failed: %s", __FUNCTION__, esp_err_to_name(ret));
     }
-    delay_ms(10);
+    delay_ms(50);
     return ret;
 }
 
