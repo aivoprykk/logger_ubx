@@ -81,7 +81,7 @@ extern "C" {
 #endif
 #endif
 
-#if (CONFIG_UBLOX_LOG_LEVEL == CONFIG_UBLOX_LOG_LEVEL_TRACE) // "A lot of logs to give detailed information"
+#if defined(CONFIG_UBLOX_LOG_LEVEL_TRACE) // "A lot of logs to give detailed information"
 
 #define DLOG LOG_INFO
 #define DMEAS_START MEAS_START
@@ -93,7 +93,7 @@ extern "C" {
 #define WMEAS_START MEAS_START
 #define WMEAS_END MEAS_END
 
-#elif (CONFIG_UBLOX_LOG_LEVEL == CONFIG_UBLOX_LOG_LEVEL_INFO) // "Log important events"
+#elif defined(CONFIG_UBLOX_LOG_LEVEL_INFO) // "Log important events"
 
 #define DLOG(a, b, ...) ((void)0)
 #define DMEAS_START() ((void)0)
@@ -104,7 +104,7 @@ extern "C" {
 #define WMEAS_START MEAS_START
 #define WMEAS_END MEAS_END
 
-#elif (CONFIG_UBLOX_LOG_LEVEL == CONFIG_UBLOX_LOG_LEVEL_WARN) // "Log if something unwanted happened but didn't cause a problem"
+#elif defined(CONFIG_UBLOX_LOG_LEVEL_WARN) // "Log if something unwanted happened but didn't cause a problem"
 
 #define DLOG(a, b, ...) ((void)0)
 #define DMEAS_START() ((void)0)

@@ -190,6 +190,7 @@ typedef struct ubx_config_s {
     bool ready;
     bool time_set;
     bool signal_ok;
+    bool is_on;
     uint16_t first_fix;
     uint32_t next_time_sync;
     uint32_t ready_time;
@@ -218,6 +219,9 @@ typedef struct ubx_config_s {
     .config_ok = false,                               \
     .ready = false,                                \
     .time_set = false,                                \
+    .signal_ok = false,                               \
+    .is_on = false,                                  \
+    .first_fix = 0,                                   \
     .next_time_sync = 0,                              \
     .ready_time = 0,                                    \
 }

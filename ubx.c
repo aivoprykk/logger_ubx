@@ -226,6 +226,7 @@ esp_err_t ubx_on(ubx_config_t *ubx) {
     esp_err_t ret = ESP_OK;
     ret = ubx_uart_init(ubx);
     IMEAS_END(TAG, "[%s] took %llu", __func__);
+    ubx->is_on = true;
     return ret;
 }
 
@@ -238,6 +239,7 @@ esp_err_t ubx_off(ubx_config_t *ubx) {
         ESP_LOGE(TAG, "[%s] ubx_uart_deinit failed", __FUNCTION__);
     }
     ubx->ready = false;
+    ubx->is_on = false;
     IMEAS_END(TAG, "[%s] took %llu", __func__);
     return ret;
 }
@@ -973,17 +975,17 @@ esp_err_t write_ubx_msg(const ubx_config_t *ubx, uint8_t *msg, size_t size, bool
     esp_err_t ret = ESP_OK;
     if(need_checksum)
         add_checksum(msg, size, msg + size - 2, msg + size - 1);
-#if (CONFIG_UBLOX_LOG_LEVEL <= CONFIG_UBLOX_LOG_LEVEL_TRACE)
+#if defined(CONFIG_UBLOX_LOG_LEVEL_TRACE)
     printf("ubx_cfg_m: [ ");
 #endif
     for(uint16_t i=0; i < size; ++i){ // write the message byte by byte
-#if (CONFIG_UBLOX_LOG_LEVEL <= CONFIG_UBLOX_LOG_LEVEL_TRACE)
+#if defined(CONFIG_UBLOX_LOG_LEVEL_TRACE)
         printf("0x%01x ", *(msg+i));
 #endif
         if(uart_write_bytes(ubx->uart_num, msg+i, 1) != 1)
             ret = ESP_FAIL;
     }
-#if (CONFIG_UBLOX_LOG_LEVEL <= CONFIG_UBLOX_LOG_LEVEL_TRACE)
+#if defined(CONFIG_UBLOX_LOG_LEVEL_TRACE)
     printf("] (%u)\n", size);
 #endif
     return ret;
