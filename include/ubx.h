@@ -97,6 +97,7 @@ typedef enum ubx_output_rate_e {
     UBX_OUTPUT_2HZ = 2,
     UBX_OUTPUT_5HZ = 5,
     UBX_OUTPUT_10HZ = 10,
+    UBX_OUTPUT_16HZ = 16,
     UBX_OUTPUT_20HZ = 20
 } ubx_output_rate_t;
 
@@ -105,15 +106,17 @@ typedef enum ubx_output_rate_e {
     UBX_OUTPUT_2HZ,        \
     UBX_OUTPUT_5HZ,        \
     UBX_OUTPUT_10HZ,       \
+    UBX_OUTPUT_16HZ,       \
     UBX_OUTPUT_20HZ        \
 }
 #define OUTPUT_RATE_COUNT 5
-#define UBX_OUTPUT_RATE_DEFAULT UBX_OUTPUT_5HZ
+#define UBX_OUTPUT_RATE_DEFAULT UBX_OUTPUT_10HZ
 #define UBX_OUTPUT_RATE_STRINGS { \
     "1",                         \
     "2",                         \
     "5",                         \
     "10",                        \
+    "16",                        \
     "20"                         \
 }
 
@@ -157,18 +160,20 @@ typedef struct ubx_rtc_config_s {
     uint8_t hw_id[6];
     uint8_t prot_ver;
     uint8_t gnss;
+    uint8_t gnss_count;
     bool msgout_sat;
 } ubx_rtc_config_t;
 
-#define UBX_RTC_DEFAULT_CONFIG() { \
-    .hw_type = UBX_TYPE_UNKNOWN,   \
-    .baud = UBX_BAUD_38400,        \
-    .output_rate = UBX_OUTPUT_5HZ, \
-    .nav_mode = UBX_MODE_SEA,      \
-    .hw_id = {0},                  \
-    .prot_ver = 0,                 \
-    .gnss = 5,                     \
-    .msgout_sat = false,           \
+#define UBX_RTC_DEFAULT_CONFIG() {  \
+    .hw_type = UBX_TYPE_UNKNOWN,    \
+    .baud = UBX_BAUD_115200,        \
+    .output_rate = UBX_OUTPUT_10HZ, \
+    .nav_mode = UBX_MODE_SEA,       \
+    .hw_id = {0},                   \
+    .prot_ver = 0,                  \
+    .gnss = 111, /* 01101111 */      \
+    .gnss_count = 4,                \
+    .msgout_sat = true,            \
 }
 
 /**

@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 /*!< Timeout for the ubx message */
-#define MSG_READ_TIMEOUT 1500
+#define MSG_READ_TIMEOUT 2000
 
 /*!< UBX Protocol headers */
 #define UBX_HDR_A 0xB5
@@ -165,8 +165,8 @@ uint8_t hex_char_to_uint8_t(char c);
 void hex_string_to_uint8_t(const char* hex_string, uint8_t* output, size_t output_size);
 
 esp_err_t ubx_cfg_send_m(ubx_config_t *ubx, uint8_t * msg, size_t msg_len, bool need_ack);
-esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx, uint8_t cls, uint8_t id, uint8_t * payload, size_t payload_len, bool need_ack);
-esp_err_t ubx_cfg_valset(ubx_config_t *ubx, uint8_t * cfg, size_t payload_len, bool need_ack);
+esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx, uint8_t cls, uint8_t id, const uint8_t * payload, size_t payload_len, bool need_ack);
+esp_err_t ubx_cfg_valset(ubx_config_t *ubx, const uint8_t * cfg, size_t payload_len, bool need_ack);
 esp_err_t ubx_cfg_get(ubx_msg_byte_ctx_t * mctx);
 esp_err_t ubx_uart_set_baud(ubx_config_t *ubx);
 esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, uint32_t baud);

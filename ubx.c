@@ -437,8 +437,9 @@ esp_err_t ubx_cfg_send_m(ubx_config_t *ubx, uint8_t * msg, size_t msg_len, bool 
     return ret;
 }
 
-esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx, uint8_t cls, uint8_t id, uint8_t * payload, size_t len, bool need_ack) {
-    uint8_t msgb[] = {UBX_HDR_A, UBX_HDR_B, cls, id, 0x00, 0x00, 0x00, 0x00}, *msg = 0;
+esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx, uint8_t cls, uint8_t id, const uint8_t * payload, size_t len, bool need_ack) {
+    const uint8_t msgb[] = {UBX_HDR_A, UBX_HDR_B, cls, id, 0x00, 0x00, 0x00, 0x00};
+    uint8_t *msg = 0;
     size_t msgb_len = sizeof(msgb), total_len = msgb_len + len;
     if(len){
         msg = calloc(total_len, sizeof(uint8_t));
@@ -447,7 +448,7 @@ esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx, uint8_t cls, uint8_t id, uint8_t *
         memcpy(msg+6, payload, len); // copy payload
     }
     else
-        msg = &(msgb[0]); // no payload
+        msg = (uint8_t*)&(msgb[0]); // no payload
     assert(msg);
     esp_err_t ret = ubx_cfg_send_m(ubx, msg, total_len, need_ack);
     if(len)
@@ -455,12 +456,12 @@ esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx, uint8_t cls, uint8_t id, uint8_t *
     return ret;
 }
 
-esp_err_t ubx_cfg_valset(ubx_config_t *ubx, uint8_t * payload, size_t len, bool need_ack) {
+esp_err_t ubx_cfg_valset(ubx_config_t *ubx, const uint8_t * payload, size_t len, bool need_ack) {
     ILOG(TAG, "[%s]", __func__);
     if(ubx->rtc_conf->hw_type < UBX_TYPE_M9)
         return ESP_ERR_INVALID_ARG;
     uint8_t *msg = calloc(len+4, sizeof(uint8_t));
-    memcpy(msg, (uint8_t[]){0x01, 0x01, 0x00, 0x00}, 4);
+    memcpy(msg, (const uint8_t[]){0x01, 0x01, 0x00, 0x00}, 4);
     memcpy(msg+4, payload, len);
     esp_err_t ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_VALSET, msg, len + 4, need_ack);
     free(msg);
@@ -516,7 +517,7 @@ esp_err_t ubx_set_prot_msg_out(ubx_config_t *ubx, bool enable_nmea, bool enable_
     if(!enable_nmea && !enable_ubx)
         enable_ubx=true;
     ILOG(TAG, "[%s] going to enable_nmea: %u, enable_ubx: %u", __FUNCTION__, enable_nmea, enable_ubx);
-    ret = ubx_cfg_valset(ubx, (uint8_t[]){
+    ret = ubx_cfg_valset(ubx, (const uint8_t[]){
         0x02, 0x00, 0x74, 0x10, enable_nmea ? 0x01 : 0x00,
         0x01, 0x00, 0x74, 0x10, enable_ubx ? 0x01 : 0x00},10, true);
     if(!ret){
@@ -524,7 +525,7 @@ esp_err_t ubx_set_prot_msg_out(ubx_config_t *ubx, bool enable_nmea, bool enable_
         return ret;
     }
     // fallback hw m8 and below
-    return send_ubx_cfg_msg(ubx, CLS_CFG, CFG_NAV5, (uint8_t[]){
+    return send_ubx_cfg_msg(ubx, CLS_CFG, CFG_NAV5, (const uint8_t[]){
                                   /* portID, reserved1 */ 0x01, 0x00,
                                   /* txReady x2 */ 0x00, 0x00,
                                   /* mode x4 */ 0xd0, 0x08, 0x00, 0x00,
@@ -545,7 +546,7 @@ esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, uint32_t baud) {
     esp_err_t ret = ESP_OK;
     uint8_t output_vec[4] = {0, 0, 0, 0};
     encode_uint32(output_vec, baud);
-    ret = ubx_cfg_valset(ubx, (uint8_t[]){
+    ret = ubx_cfg_valset(ubx, (const uint8_t[]){
         0x01, 0x00, 0x52, 0x40, output_vec[0], output_vec[1], output_vec[2], output_vec[3]
         }, 8, false);
     if(!ret)
@@ -554,7 +555,7 @@ esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, uint32_t baud) {
         ESP_LOGE(TAG, "[%s] ubx_cfg_valset failed, fallback to old cfg_msg.", __FUNCTION__);
     }
     // fallback hw m8 and below
-    ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_PRT, (uint8_t[]){
+    ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_PRT, (const uint8_t[]){
         /* portID, reserved1 */ 0x01, 0x00,
         /* txReady x2 */ 0x00, 0x00,
         /* mode x4 */ 0xd0, 0x08, 0x00, 0x00,
@@ -567,8 +568,6 @@ esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, uint32_t baud) {
     done:
     ubx->rtc_conf->baud = baud;
     ret = ubx_uart_set_baud(ubx);
-    if(!ret)
-        ILOG(TAG, "[%s] baud rate set to %"PRIu32, __FUNCTION__, baud);
     return ESP_OK;
 }
 
@@ -577,6 +576,30 @@ esp_err_t ubx_set_uart_out_rate(ubx_config_t *ubx) {
     esp_err_t ret = ESP_OK;
     uint8_t output_vec[2]={0,0};
     uint32_t baud = UBX_BAUD_38400;
+    if(ubx->rtc_conf->hw_type == UBX_TYPE_M8){
+        if(ubx->rtc_conf->gnss_count >= 2 && ubx->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
+            ILOG(TAG, "[%s] 2 gnss, output rate > 10hz, fallback to 10hz", __FUNCTION__);
+            ubx->rtc_conf->output_rate = UBX_OUTPUT_10HZ;
+        }
+        else if(ubx->rtc_conf->gnss_count == 1 && ubx->rtc_conf->output_rate > UBX_OUTPUT_5HZ){
+            ILOG(TAG, "[%s] 1 gnss, output rate > 5hz, fallback to 5hz", __FUNCTION__);
+            ubx->rtc_conf->output_rate = UBX_OUTPUT_5HZ;
+        }
+    }
+    if(ubx->rtc_conf->hw_type == UBX_TYPE_M10){
+        if(ubx->rtc_conf->gnss_count == 4 && ubx->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
+            ILOG(TAG, "[%s] 4 gnss, output rate > 10hz, fallback to 10hz", __FUNCTION__);
+            ubx->rtc_conf->output_rate = UBX_OUTPUT_10HZ;
+        }
+        else if(ubx->rtc_conf->gnss_count == 3 && ubx->rtc_conf->output_rate > UBX_OUTPUT_16HZ){
+            ILOG(TAG, "[%s] 3 gnss, output rate > 16hz, fallback to 16hz", __FUNCTION__);
+            ubx->rtc_conf->output_rate = UBX_OUTPUT_16HZ;
+        }
+        else if(ubx->rtc_conf->gnss_count == 2 && ubx->rtc_conf->output_rate > UBX_OUTPUT_20HZ){
+            ILOG(TAG, "[%s] 2 gnss, output rate > 20hz, fallback to 20hz", __FUNCTION__);
+            ubx->rtc_conf->output_rate = UBX_OUTPUT_20HZ;
+        }
+    }
     encode_uint16(&(output_vec[0]), (1000/ubx->rtc_conf->output_rate));
     if(ubx->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
         baud = UBX_BAUD_230400;
@@ -590,8 +613,8 @@ esp_err_t ubx_set_uart_out_rate(ubx_config_t *ubx) {
     else {
         baud = UBX_BAUD_38400;
     }
-    ILOG(TAG, "[%s] output rate: %"PRIu8", baud: %"PRIu32, __FUNCTION__, ubx->rtc_conf->output_rate, baud);
-    ret = ubx_cfg_valset(ubx, (uint8_t[]){
+    ILOG(TAG, "[%s] solutions:%hhu output rate: %"PRIu8", baud: %"PRIu32, __FUNCTION__, ubx->rtc_conf->gnss_count, ubx->rtc_conf->output_rate, baud);
+    ret = ubx_cfg_valset(ubx, (const uint8_t[]){
         0x01, 0x00, 0x21, 0x30, output_vec[0], output_vec[1]
         }, 6, true);
     if(!ret)
@@ -600,58 +623,116 @@ esp_err_t ubx_set_uart_out_rate(ubx_config_t *ubx) {
         ESP_LOGE(TAG, "[%s] ubx_cfg_valset failed, fallback to old cfg_msg.", __FUNCTION__);
     }
     // fallback hw m8 and below
-    ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_RATE, (uint8_t[]){
+    ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_RATE, (const uint8_t[]){
                 /* measRate 2b */ output_vec[0], output_vec[1],
                 /* navRate always 1 */ 0x01, 0x00,
                 /* timeRef UTC */ 0x01, 0x00},6, true);
     done:
     if(!ret)
         ret = ubx_set_uart_baud_rate(ubx, baud);
-    if(!ret)
-        ILOG(TAG, "[%s] output rate set to %d Hz", __FUNCTION__, ubx->rtc_conf->output_rate);
     return ret;
 }
 
 esp_err_t ubx_set_gnss(ubx_config_t *ubx, uint8_t mode) {
     ILOG(TAG, "[%s]", __func__);
-    uint8_t enable_galileo = 0x01;
-    uint8_t enable_beidou = 0x01;
-    uint8_t enable_glonass = 0x01;
-    if(mode==2) {
-        enable_galileo=0x00;
+    uint8_t enable_gps = 0x01; // us gps
+    uint8_t enable_sbas = 0x01; // us sbas
+    uint8_t enable_galileo = 0x00; // eu galileo
+    uint8_t enable_glonass = 0x00; // ru glonass
+    uint8_t enable_beidou = 0x00; // cn beidou
+    uint8_t enable_qzss = 0x01; // jp qzss
+    
+    if(mode==3 || mode==5) {
+        mode= ubx->rtc_conf->hw_type >= UBX_TYPE_M9 ? 111 : 103;
     }
-    if(mode<4) {
-        enable_beidou=0x00;
+    if((mode & (1 << 0)) == 0) {
+        enable_gps=0x00;
     }
-    else if(mode==4) {
-        enable_glonass = 0x00;
+    if((mode & (1 << 1)) == 0) {
+        enable_sbas=0x00;
     }
-    if(enable_glonass==1 && enable_beidou==1 && enable_galileo==1)
-        enable_beidou = 0x00; // default beidou disabled
-    ILOG(TAG, "[%s] mode:%hhu, enable_galileo: %u, enable_beidou: %u, enable_glonass: %u", __FUNCTION__, mode, enable_galileo, enable_beidou, enable_glonass);
-    esp_err_t ret = ubx_cfg_valset(ubx, (uint8_t[]){
-                    /* galileo */ 0x21, 0x00, 0x31, 0x10, enable_galileo,
-                    /* beidou  */ 0x22, 0x00, 0x31, 0x10, enable_beidou,
-                    /* glonass */ 0x25, 0x00, 0x31, 0x10, enable_glonass
-                    }, 3 * 5, true);
+    if((mode & (1 << 2)) != 0) {
+        enable_galileo=0x01;
+    }
+    if((mode & (1 << 3)) != 0) {
+        enable_beidou=0x01;
+    }
+    if((mode & (1 << 5)) == 0) {
+        enable_qzss=0x00;
+    }
+    if((mode & (1 << 6)) != 0) {
+        enable_glonass=0x01;
+    }
+    if(!enable_gps) {
+        ILOG(TAG, "[%s] gps disabled, force enabled as for time solution based on gps.", __FUNCTION__);
+        enable_gps = 0x01;
+    }
+    uint8_t count_solutions = enable_gps + enable_galileo + enable_glonass + enable_beidou;
+    if(count_solutions < 1) {
+        ESP_LOGE(TAG, "[%s] count_solutions < 1, fallback to gps", __FUNCTION__);
+        enable_gps = 0x01;
+    }
+    else if(count_solutions > 4) {
+        ESP_LOGE(TAG, "[%s] count_solutions > 4, fallback to gps+galileo+glonass+beidou", __FUNCTION__);
+        enable_gps = 0x01;
+        enable_galileo = 0x01;
+        enable_glonass = 0x01;
+        enable_beidou = 0x01;
+    }
+    uint8_t gnss_cmd[64] = {
+                    /* gps     */     0x1f, 0x00, 0x31, 0x10, enable_gps,
+                    /* sbas    */     0x20, 0x00, 0x31, 0x10, enable_sbas,
+                    /* galileo */     0x21, 0x00, 0x31, 0x10, enable_galileo,
+                    /* beidou  */     0x22, 0x00, 0x31, 0x10, enable_beidou,
+                    /* qzss    */     0x24, 0x00, 0x31, 0x10, enable_qzss, 
+                    /* glonass */     0x25, 0x00, 0x31, 0x10, enable_glonass
+                    };
+    uint8_t gnss_cursor = 6*5;
+    uint8_t tmp[] = {0x00, 0x31, 0x10, 0x01};
+    if(enable_gps) {
+        gnss_cmd[gnss_cursor++] = 0x01; // gps l1c/a
+        memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
+    }
+    if(enable_galileo) {
+        gnss_cmd[gnss_cursor++] = 0x07; // galileo e1
+        memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
+    }
+    if(enable_glonass) {
+        gnss_cmd[gnss_cursor++] = 0x18; // glonass l1
+        memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
+    }
+    if(enable_beidou) {
+        if(ubx->rtc_conf->hw_type <= UBX_TYPE_M9) {
+            gnss_cmd[gnss_cursor++] = 0x0d; // beidou b1
+            memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
+        }
+        else {
+            gnss_cmd[gnss_cursor++] = 0x0d; // beidou b1
+            memcpy(&gnss_cmd[gnss_cursor], tmp, 3), gnss_cursor += 3;
+            gnss_cmd[gnss_cursor++] = 0x00;
+            gnss_cmd[gnss_cursor++] = 0x0f; // beidou b1c
+            memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
+        }
+    }
+    ILOG(TAG, "[%s] mode:%hhu, gps(us): %hhu, sbas(us): %hhu galileo(eu): %hhu, beidou(cn): %hhu, glonass(ru): %hhu, qzss(jp): %hhu", __FUNCTION__, mode, enable_gps, enable_sbas, enable_galileo, enable_beidou, enable_glonass, enable_qzss);
+    esp_err_t ret = ubx_cfg_valset(ubx, gnss_cmd, gnss_cursor, true);
     if(!ret)
         return ret;
     else {
         ESP_LOGW(TAG, "[%s] ubx_cfg_valset failed, fallback to old cfg_msg.", __FUNCTION__);
     }
     // fallback hw m8 and below
-    return send_ubx_cfg_msg(ubx, CLS_CFG, CFG_GNSS, (uint8_t[]){
+    return send_ubx_cfg_msg(ubx, CLS_CFG, CFG_GNSS, (const uint8_t[]){
                     /* msgVer, numTrkChHw, numTrkChUse */ 0x00, 0x20, 0x20,
                     /* numConfig */ 0x07, 
                     /* rep block: gnssID, resTrkCh, maxTrkCh, reserved0, flags */ 
-                    /* gps     */ 0x00, 0x08, 0x10, 0x00, 0x01, 0x00, 0x01, 0x01, 
-                    /* sbas    */ 0x01, 0x01, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01, 
+                    /* gps     */ 0x00, 0x08, 0x10, 0x00, enable_gps, 0x00, 0x01, 0x01, 
+                    /* sbas    */ 0x01, 0x01, 0x03, 0x00, enable_sbas, 0x00, 0x01, 0x01, 
                     /* galileo */ 0x02, 0x04, 0x08, 0x00, enable_galileo, 0x00, 0x01, 0x01, 
                     /* beidou  */ 0x03, 0x08, 0x10, 0x00, enable_beidou, 0x00, 0x01, 0x01, 
-                    /* imes    */ 0x04, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x01, 
-                    /* qzss    */ 0x05, 0x00, 0x03, 0x00, 0x01, 0x00, 0x01, 0x01, 
+                    /* qzss    */ 0x05, 0x00, 0x03, 0x00, enable_qzss, 0x00, 0x01, 0x01, 
                     /* glonass */ 0x06, 0x08, 0x0E, 0x00, enable_glonass, 0x00, 0x01, 0x01
-                    }, 8 * 7 + 4, true);
+                    }, 8 * 6 + 4, true);
 }
 
 esp_err_t ubx_set_msgout(ubx_config_t *ubx) {
@@ -664,7 +745,7 @@ esp_err_t ubx_set_msgout(ubx_config_t *ubx) {
             cfg_dop_id = 0x39;
     }
     ILOG(TAG, "[%s] enable navpvt and navdop ubx messages.", __FUNCTION__);
-    ret = ubx_cfg_valset(ubx, (uint8_t[]){
+    ret = ubx_cfg_valset(ubx, (const uint8_t[]){
                 /* pvt id, cfg value */ cfg_pvt_id, 0x00, 0x91, 0x20, 0x01,
                 /* dop id, cfg value */ cfg_dop_id, 0x00, 0x91, 0x20, 0x01,
                 }, 10, true);
@@ -674,7 +755,7 @@ esp_err_t ubx_set_msgout(ubx_config_t *ubx) {
         ESP_LOGW(TAG, "[%s] ubx_cfg_valset failed, fallback to old cfg_msg.", __FUNCTION__);
     }
     // fallback hw m8 and below
-    ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_MSG, (uint8_t[]){
+    ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_MSG, (const uint8_t[]){
                 /* msgClass, msgID */ 0x01, cfg_pvt_id,
                 /* rate port 0 i2c */ 0x00, 
                 /* rate port 1, 2 serial */ 0x01, 0x00, 
@@ -682,7 +763,7 @@ esp_err_t ubx_set_msgout(ubx_config_t *ubx) {
                 }, 8, true);
     if(ret != ESP_OK)
         return ret;
-    ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_MSG, (uint8_t[]){
+    ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_MSG, (const uint8_t[]){
                 /* msgClass, msgID */ 0x01, cfg_dop_id,
                 /* rate port 0 i2c */ 0x00, 
                 /* rate port 1, 2 serial */ 0x01, 0x00, 
@@ -698,19 +779,9 @@ esp_err_t ubx_set_msgout_sat(ubx_config_t *ubx) {
     the message is sent every second navigation solution. 
     For configuring NMEA messages, the section NMEA Messages 
     Overview describes class and identifier numbers used. */
-    uint8_t cfg_rate = 0x0A;  // 1/10 sec rate
-    uint8_t cfg_sat_id = 0x35;
-    switch (ubx->rtc_conf->hw_type) {
-        case UBX_TYPE_M9:
-            cfg_rate=0x28;  // 1/40 sec rate, 25ms
-            /* fall through */ 
-        case UBX_TYPE_M10:
-            cfg_sat_id = 0x16;
-            break;
-        default:
-            break;
-    }
-    esp_err_t ret =  ubx_cfg_valset(ubx, (uint8_t[]){
+    uint8_t cfg_rate = 0x01;  // 1/10 sec rate
+    uint8_t cfg_sat_id = 0x16;
+    esp_err_t ret =  ubx_cfg_valset(ubx, (const uint8_t[]){
                 /* sat id, cfg value */ cfg_sat_id, 0x00, 0x91, 0x20, cfg_rate                    
             }, 5, true);
     if(!ret)
@@ -719,7 +790,7 @@ esp_err_t ubx_set_msgout_sat(ubx_config_t *ubx) {
         ESP_LOGW(TAG, "[%s] ubx_cfg_valset failed, fallback to old cfg_msg.", __FUNCTION__);
     }
     // fallback hw m8 and below
-    return send_ubx_cfg_msg(ubx, CLS_CFG, CFG_MSG, (uint8_t[]){
+    return send_ubx_cfg_msg(ubx, CLS_CFG, CFG_MSG, (const uint8_t[]){
                 /* msgClass, msgID */ 0x01, cfg_sat_id,
                 /* rate port 0 i2c */ 0x00,
                 /* rate port 1, 2 serial */ cfg_rate, 0x00, 
@@ -729,7 +800,7 @@ esp_err_t ubx_set_msgout_sat(ubx_config_t *ubx) {
 
 esp_err_t ubx_uart_save_cfg(ubx_config_t *ubx) {
     ILOG(TAG, "[%s]", __func__);
-    esp_err_t ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_CFG, (uint8_t[]){
+    esp_err_t ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_CFG, (const uint8_t[]){
                 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00,
                 0x00, 0x00, 0x00, 0x00, 0x1c
             }, 13, true);
@@ -740,7 +811,7 @@ esp_err_t ubx_uart_save_cfg(ubx_config_t *ubx) {
 }
 
 esp_err_t ubx_uart_set_baud(ubx_config_t *ubx) {
-    ILOG(TAG, "[%s] %lubd.", __func__, ubx->rtc_conf->baud);
+    ILOG(TAG, "[%s] %lubd", __func__, ubx->rtc_conf->baud);
     esp_err_t ret = ESP_OK;
     delay_ms(10);
     if(xSemaphoreTake(xMutex, portMAX_DELAY) == pdTRUE) {
