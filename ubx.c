@@ -244,6 +244,43 @@ esp_err_t ubx_off(ubx_config_t *ubx) {
     return ret;
 }
 
+static esp_err_t fix_config(ubx_config_t *ubx) {
+    uint8_t gnss = ubx->rtc_conf->gnss;
+    uint8_t gnss_count = 1;
+    if(gnss<=5) ubx->rtc_conf->gnss = gnss = ubx->rtc_conf->hw_type >= UBX_TYPE_M9 ? 111 : 103;
+    if(ubx->rtc_conf->gnss == 111 && ubx->rtc_conf->hw_type < UBX_TYPE_M9) ubx->rtc_conf->gnss = gnss = 103;
+    if((gnss & (1 << 2)) != 0) ++gnss_count; // galileo
+    if((gnss & (1 << 3)) != 0) ++gnss_count; // beidou
+    if((gnss & (1 << 6)) != 0) ++gnss_count; // glonass
+    if(gnss_count > 4) gnss_count = 4;
+    ubx->rtc_conf->gnss_count = gnss_count;
+    if(ubx->rtc_conf->hw_type == UBX_TYPE_M8){
+        if(ubx->rtc_conf->gnss_count >= 2 && ubx->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
+            ILOG(TAG, "[%s] 2 gnss, output rate > 10hz, fallback to 10hz", __FUNCTION__);
+            ubx->rtc_conf->output_rate = UBX_OUTPUT_10HZ;
+        }
+        else if(ubx->rtc_conf->gnss_count == 1 && ubx->rtc_conf->output_rate > UBX_OUTPUT_5HZ){
+            ILOG(TAG, "[%s] 1 gnss, output rate > 5hz, fallback to 5hz", __FUNCTION__);
+            ubx->rtc_conf->output_rate = UBX_OUTPUT_5HZ;
+        }
+    }
+    if(ubx->rtc_conf->hw_type == UBX_TYPE_M10){
+        if(ubx->rtc_conf->gnss_count == 4 && ubx->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
+            ILOG(TAG, "[%s] 4 gnss, output rate > 10hz, fallback to 10hz", __FUNCTION__);
+            ubx->rtc_conf->output_rate = UBX_OUTPUT_10HZ;
+        }
+        else if(ubx->rtc_conf->gnss_count == 3 && ubx->rtc_conf->output_rate > UBX_OUTPUT_16HZ){
+            ILOG(TAG, "[%s] 3 gnss, output rate > 16hz, fallback to 16hz", __FUNCTION__);
+            ubx->rtc_conf->output_rate = UBX_OUTPUT_16HZ;
+        }
+        else if(ubx->rtc_conf->gnss_count == 2 && ubx->rtc_conf->output_rate > UBX_OUTPUT_20HZ){
+            ILOG(TAG, "[%s] 2 gnss, output rate > 20hz, fallback to 20hz", __FUNCTION__);
+            ubx->rtc_conf->output_rate = UBX_OUTPUT_20HZ;
+        }
+    }
+    return ESP_OK;
+}
+
 esp_err_t ubx_setup(ubx_config_t *ubx) {
     ILOG(TAG, "[%s]", __func__);
     IMEAS_START();
@@ -274,6 +311,8 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
         ESP_LOGE(TAG, "[%s] ubx_get_hw_version failed", __FUNCTION__);
         goto done;
     }
+    
+    fix_config(ubx);
 
     // set ubx message protocol
     for(try = 0;try<=max_tries; ++try) {
@@ -576,30 +615,7 @@ esp_err_t ubx_set_uart_out_rate(ubx_config_t *ubx) {
     esp_err_t ret = ESP_OK;
     uint8_t output_vec[2]={0,0};
     uint32_t baud = UBX_BAUD_38400;
-    if(ubx->rtc_conf->hw_type == UBX_TYPE_M8){
-        if(ubx->rtc_conf->gnss_count >= 2 && ubx->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
-            ILOG(TAG, "[%s] 2 gnss, output rate > 10hz, fallback to 10hz", __FUNCTION__);
-            ubx->rtc_conf->output_rate = UBX_OUTPUT_10HZ;
-        }
-        else if(ubx->rtc_conf->gnss_count == 1 && ubx->rtc_conf->output_rate > UBX_OUTPUT_5HZ){
-            ILOG(TAG, "[%s] 1 gnss, output rate > 5hz, fallback to 5hz", __FUNCTION__);
-            ubx->rtc_conf->output_rate = UBX_OUTPUT_5HZ;
-        }
-    }
-    if(ubx->rtc_conf->hw_type == UBX_TYPE_M10){
-        if(ubx->rtc_conf->gnss_count == 4 && ubx->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
-            ILOG(TAG, "[%s] 4 gnss, output rate > 10hz, fallback to 10hz", __FUNCTION__);
-            ubx->rtc_conf->output_rate = UBX_OUTPUT_10HZ;
-        }
-        else if(ubx->rtc_conf->gnss_count == 3 && ubx->rtc_conf->output_rate > UBX_OUTPUT_16HZ){
-            ILOG(TAG, "[%s] 3 gnss, output rate > 16hz, fallback to 16hz", __FUNCTION__);
-            ubx->rtc_conf->output_rate = UBX_OUTPUT_16HZ;
-        }
-        else if(ubx->rtc_conf->gnss_count == 2 && ubx->rtc_conf->output_rate > UBX_OUTPUT_20HZ){
-            ILOG(TAG, "[%s] 2 gnss, output rate > 20hz, fallback to 20hz", __FUNCTION__);
-            ubx->rtc_conf->output_rate = UBX_OUTPUT_20HZ;
-        }
-    }
+
     encode_uint16(&(output_vec[0]), (1000/ubx->rtc_conf->output_rate));
     if(ubx->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
         baud = UBX_BAUD_230400;
@@ -638,16 +654,10 @@ esp_err_t ubx_set_gnss(ubx_config_t *ubx, uint8_t mode) {
     uint8_t enable_gps = 0x01; // us gps
     uint8_t enable_sbas = 0x01; // us sbas
     uint8_t enable_galileo = 0x00; // eu galileo
-    uint8_t enable_glonass = 0x00; // ru glonass
     uint8_t enable_beidou = 0x00; // cn beidou
     uint8_t enable_qzss = 0x01; // jp qzss
+    uint8_t enable_glonass = 0x00; // ru glonass
     
-    if(mode==3 || mode==5) {
-        mode= ubx->rtc_conf->hw_type >= UBX_TYPE_M9 ? 111 : 103;
-    }
-    if((mode & (1 << 0)) == 0) {
-        enable_gps=0x00;
-    }
     if((mode & (1 << 1)) == 0) {
         enable_sbas=0x00;
     }
@@ -663,16 +673,11 @@ esp_err_t ubx_set_gnss(ubx_config_t *ubx, uint8_t mode) {
     if((mode & (1 << 6)) != 0) {
         enable_glonass=0x01;
     }
-    if(!enable_gps) {
-        ILOG(TAG, "[%s] gps disabled, force enabled as for time solution based on gps.", __FUNCTION__);
-        enable_gps = 0x01;
-    }
-    uint8_t count_solutions = enable_gps + enable_galileo + enable_glonass + enable_beidou;
-    if(count_solutions < 1) {
+    if(ubx->rtc_conf->gnss_count < 1) {
         ESP_LOGE(TAG, "[%s] count_solutions < 1, fallback to gps", __FUNCTION__);
         enable_gps = 0x01;
     }
-    else if(count_solutions > 4) {
+    else if(ubx->rtc_conf->gnss_count > 4) {
         ESP_LOGE(TAG, "[%s] count_solutions > 4, fallback to gps+galileo+glonass+beidou", __FUNCTION__);
         enable_gps = 0x01;
         enable_galileo = 0x01;
@@ -690,27 +695,27 @@ esp_err_t ubx_set_gnss(ubx_config_t *ubx, uint8_t mode) {
     uint8_t gnss_cursor = 6*5;
     uint8_t tmp[] = {0x00, 0x31, 0x10, 0x01};
     if(enable_gps) {
-        gnss_cmd[gnss_cursor++] = 0x01; // gps l1c/a
+        gnss_cmd[gnss_cursor++] = 0x01; // enable gps l1c/a
         memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
     }
     if(enable_galileo) {
-        gnss_cmd[gnss_cursor++] = 0x07; // galileo e1
+        gnss_cmd[gnss_cursor++] = 0x07; // enable galileo e1
         memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
     }
     if(enable_glonass) {
-        gnss_cmd[gnss_cursor++] = 0x18; // glonass l1
+        gnss_cmd[gnss_cursor++] = 0x18; // enable glonass l1of
         memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
     }
     if(enable_beidou) {
-        if(ubx->rtc_conf->hw_type <= UBX_TYPE_M9) {
-            gnss_cmd[gnss_cursor++] = 0x0d; // beidou b1
+        if(ubx->rtc_conf->hw_type <= UBX_TYPE_M9 || !enable_glonass) {
+            gnss_cmd[gnss_cursor++] = 0x0d; // enable beidou b1l
             memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
         }
         else {
-            gnss_cmd[gnss_cursor++] = 0x0d; // beidou b1
+            gnss_cmd[gnss_cursor++] = 0x0d; // disable beidou b1l
             memcpy(&gnss_cmd[gnss_cursor], tmp, 3), gnss_cursor += 3;
             gnss_cmd[gnss_cursor++] = 0x00;
-            gnss_cmd[gnss_cursor++] = 0x0f; // beidou b1c
+            gnss_cmd[gnss_cursor++] = 0x0f; // enable beidou b1c
             memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
         }
     }
@@ -779,7 +784,7 @@ esp_err_t ubx_set_msgout_sat(ubx_config_t *ubx) {
     the message is sent every second navigation solution. 
     For configuring NMEA messages, the section NMEA Messages 
     Overview describes class and identifier numbers used. */
-    uint8_t cfg_rate = 0x01;  // 1/10 sec rate
+    uint8_t cfg_rate = (ubx->rtc_conf->output_rate & 0xff);  // once in a second
     uint8_t cfg_sat_id = 0x16;
     esp_err_t ret =  ubx_cfg_valset(ubx, (const uint8_t[]){
                 /* sat id, cfg value */ cfg_sat_id, 0x00, 0x91, 0x20, cfg_rate                    
@@ -811,7 +816,7 @@ esp_err_t ubx_uart_save_cfg(ubx_config_t *ubx) {
 }
 
 esp_err_t ubx_uart_set_baud(ubx_config_t *ubx) {
-    ILOG(TAG, "[%s] %lubd", __func__, ubx->rtc_conf->baud);
+    ILOG(TAG, "[%s] %lu", __func__, ubx->rtc_conf->baud);
     esp_err_t ret = ESP_OK;
     delay_ms(10);
     if(xSemaphoreTake(xMutex, portMAX_DELAY) == pdTRUE) {
@@ -927,6 +932,7 @@ esp_err_t ubx_try_baud(ubx_msg_byte_ctx_t * mctx) {
                 ESP_LOGW(TAG, "[%s] ubx_uart_set_baud failed: %s", __FUNCTION__, esp_err_to_name(ret));
             }
         }
+        DLOG(TAG, "[%s] trying read initial data with %"PRIu32" baud", __FUNCTION__, ubx->rtc_conf->baud);
         memset(mctx->msg, 0, mctx->msg_size);
         mctx->ubx = ubx;
         ret = read_ubx_msg(mctx); // just fill the msg buffer to check if we can read ubx or nmea message
