@@ -289,13 +289,14 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
         ret  = ESP_ERR_INVALID_ARG;
         goto done;
     }
-    if(ubx->uart_setup_ok){
+    if(ubx->uart_setup_ok || ubx->config_progress){
         goto done;
     }
+    ubx->config_progress = 1;
     ret = ubx_on(ubx);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_on failed", __FUNCTION__);
-        goto done;
+        goto fail;
     }
     // initial read
     ret = ubx_initial_read(ubx, false);
@@ -309,7 +310,7 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
     }
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_get_hw_version failed", __FUNCTION__);
-        goto done;
+        goto fail;
     }
     
     fix_config(ubx);
@@ -322,7 +323,7 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
     }
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_prot_msg_out failed", __FUNCTION__);
-        goto done;
+        goto fail;
     }
     
     if(ubx->rtc_conf->hw_type == UBX_TYPE_M8){
@@ -362,7 +363,7 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
     }
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_set_gnss failed", __FUNCTION__);
-        goto done;
+        goto fail;
     }
 
     for(try = 0;try<=max_tries; ++try) {
@@ -374,7 +375,7 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
     }
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_set_uart_out_rate failed", __FUNCTION__);
-        goto done;
+        goto fail;
     }
     
     for(try = 0;try<=max_tries; ++try) {
@@ -385,7 +386,7 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
     }
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_get_hw_id failed", __FUNCTION__);
-        goto done;
+        goto fail;
     }
 
     for(try = 0;try<=max_tries; ++try) {
@@ -395,9 +396,10 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
     }
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "[%s] ubx_get_gnss failed", __FUNCTION__);
-        goto done;
+        goto fail;
     }
-
+    fail:
+    ubx->config_progress = 0;
     done:
     ESP_ERROR_CHECK(esp_event_post(UBX_EVENT, !ret ? UBX_EVENT_SETUP_DONE : UBX_EVENT_SETUP_FAIL, NULL,0, portMAX_DELAY));
     if(!ret){

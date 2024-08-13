@@ -192,6 +192,7 @@ typedef struct ubx_config_s {
     char Ublox_type[20];
     bool uart_setup_ok;
     bool config_ok;
+    bool config_progress;
     bool ready;
     bool time_set;
     bool signal_ok;
@@ -222,6 +223,7 @@ typedef struct ubx_config_s {
     .Ublox_type = "Ublox unknown...", \
     .uart_setup_ok = false,                           \
     .config_ok = false,                               \
+    .config_progress = false,                         \
     .ready = false,                                \
     .time_set = false,                                \
     .signal_ok = false,                               \
