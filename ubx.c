@@ -80,8 +80,10 @@ esp_err_t ubx_config_deinit(ubx_config_t *ubx) {
     ILOG(TAG, "[%s]", __func__);
     if (ubx == NULL)
         return ESP_ERR_INVALID_ARG;
-    if (xMutex != NULL)
+    if (xMutex != NULL){
         vSemaphoreDelete(xMutex);
+        xMutex = NULL;
+    }
     ubx->config_ok = false;
     return ESP_OK;
 }
