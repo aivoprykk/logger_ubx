@@ -42,7 +42,7 @@ menu "Logger Ublox GPS Module Configuration"
     endmenu
     choice
         bool "Default log verbosity"
-        default UBLOX_LOG_LEVEL_WARN
+        default UBLOX_LOG_LEVEL_ERROR
         help
             Specify how important log should be added.
         config UBLOX_LOG_LEVEL_TRACE
