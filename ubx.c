@@ -13,28 +13,18 @@
 #include <esp_log.h>
 #include <driver/gpio.h>
 #include <sys/time.h>
-#include <logger_common.h>
 #include "ubx_events.h"
 
 ESP_EVENT_DEFINE_BASE(UBX_EVENT);
 
-const char * ubx_event_strings[] = {
-    "UBX_EVENT_DATETIME_SET",
-    "UBX_EVENT_PINS_INIT_DONE",
-    "UBX_EVENT_PINS_INIT_FAIL",
-    "UBX_EVENT_UART_DEINIT_DONE",
-    "UBX_EVENT_UART_INIT_DONE",
-    "UBX_EVENT_UART_INIT_FAIL",
-    "UBX_EVENT_SETUP_DONE",
-    "UBX_EVENT_SETUP_FAIL",
-    "UBX_EVENT_MSG_RECIEVED",
-};
-
+const char * const ubx_event_strings[] = { UBX_EVENT_LIST(STRINGIFY) };
 static const char *TAG = "ublox";
 static SemaphoreHandle_t xMutex = 0;
 RTC_DATA_ATTR ubx_rtc_config_t rtc_config = UBX_RTC_DEFAULT_CONFIG();
-static const uint32_t ubx_baud_rates[] = UBX_BAUD_RATES;
-static const uint8_t ubx_hw_types[] = UBX_HW_TYPES;
+static const uint32_t ubx_baud_rates[] = {UBX_BAUD_RATE_LIST(NUMERIFY_V)};
+static const uint8_t ubx_hw_types[] = { UBX_TYPE_LIST(NUMERIFY_VV) };
+static const char * const ubx_hw_type_strings[] = { UBX_TYPE_LIST(STRINGIFY_M) };
+static const char * const ubx_baud_rate_strings[] = { UBX_BAUD_RATE_LIST(STRINGIFY_L) };
 
 ubx_config_t *ubx_config_new() {
     ILOG(TAG, "[%s]", __func__);
@@ -864,7 +854,7 @@ esp_err_t ubx_get_hw_version(ubx_config_t *ubx) {
         }
         ILOG(TAG, "verext %d: [%s]", i, ver);
     }
-    ubx->rtc_conf->hw_type =*( msg + 34 + 3) == '8' ? UBX_TYPE_M8 :*( msg + 34 + 3) == '9' ? UBX_TYPE_M9 :*( msg + 34 + 3) == 'A' ? UBX_TYPE_M10 : UBX_TYPE_UNKNOWN;
+    ubx->rtc_conf->hw_type =*( msg + 34 + 3) == '8' ? UBX_TYPE_M8 : *( msg + 34 + 3) == '9' ? UBX_TYPE_M9 : *( msg + 34 + 3) == 'A' ? UBX_TYPE_M10 : UBX_TYPE_M0;
     return ESP_OK;
 }
 
@@ -919,7 +909,7 @@ esp_err_t ubx_try_baud(ubx_msg_byte_ctx_t * mctx) {
     esp_err_t ret = ESP_OK;
     uint32_t ubx_baud_rate_temp[6] = {0, 0, 0, 0, 0, 0};
     ubx_config_t *ubx = mctx->ubx;
-    for(uint8_t i=0, j=sizeof(ubx_baud_rates)/sizeof(ubx_baud_rates[0]), k; i<=j; ++i, k=0) {
+    for(uint8_t i=0, j=lengthof(ubx_baud_rates), k; i<=j; ++i, k=0) {
         ubx_baud_rate_temp[i] = ubx->rtc_conf->baud;
         if(i>0){
             if(!ubx_baud_rates[i-1])
@@ -933,7 +923,12 @@ esp_err_t ubx_try_baud(ubx_msg_byte_ctx_t * mctx) {
             ubx->rtc_conf->baud = ubx_baud_rates[i-1];
             ret = ubx_uart_set_baud(ubx);
             if (ret != ESP_OK) {
-                ESP_LOGW(TAG, "[%s] ubx_uart_set_baud failed: %s", __FUNCTION__, esp_err_to_name(ret));
+                if(ret == ESP_ERR_TIMEOUT || ret == ESP_ERR_INVALID_RESPONSE){
+                    if(i<=j)
+                        goto next;
+                    else
+                        return ret;
+                }
             }
         }
         DLOG(TAG, "[%s] trying read initial data with %"PRIu32" baud", __FUNCTION__, ubx->rtc_conf->baud);
@@ -1004,7 +999,7 @@ esp_err_t ubx_initial_read(ubx_config_t *ubx, bool get_hw) {
                 p+=2;
             else
                 goto find_space;
-            ubx->rtc_conf->hw_type = *p == '8' ? UBX_TYPE_M8 : *p == '9' ? UBX_TYPE_M9 : *p == 'A' ? UBX_TYPE_M10 : UBX_TYPE_UNKNOWN;
+            ubx->rtc_conf->hw_type = *p == '8' ? UBX_TYPE_M8 : *p == '9' ? UBX_TYPE_M9 : *p == 'A' ? UBX_TYPE_M10 : UBX_TYPE_M0;
         }
         
         if(p && (p = strstr(p, ",PROTVER="))) {
@@ -1024,13 +1019,13 @@ esp_err_t ubx_initial_read(ubx_config_t *ubx, bool get_hw) {
 const char * ubx_chip_str(const ubx_config_t *ubx) {
     switch (ubx->rtc_conf->hw_type) {
         case UBX_TYPE_M7:
-            return "M7";
+            return ubx_hw_type_strings[1];
         case UBX_TYPE_M8:
-            return "M8";
+            return ubx_hw_type_strings[2];
         case UBX_TYPE_M9:
-            return "M9";
+            return ubx_hw_type_strings[3];
         case UBX_TYPE_M10:
-            return "M10";
+            return ubx_hw_type_strings[4];
         default:
             return "UNKNOWN";
     }
@@ -1039,13 +1034,13 @@ const char * ubx_chip_str(const ubx_config_t *ubx) {
 const char * ubx_baud_str(const ubx_config_t * ubx) {
     switch (ubx->rtc_conf->baud) {
         case UBX_BAUD_9600:
-            return "9600";
+            return ubx_baud_rate_strings[0];
         case UBX_BAUD_38400:
-            return "38400";
+            return ubx_baud_rate_strings[1];
         case UBX_BAUD_115200:
-            return "115200";
+            return ubx_baud_rate_strings[2];
         case UBX_BAUD_230400:
-            return "230400";
+            return ubx_baud_rate_strings[3];
         default:
             return "UNKNOWN";
     }

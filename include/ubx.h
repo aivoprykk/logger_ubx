@@ -17,33 +17,15 @@ extern "C" {
 #include "stdbool.h"
 #include "stdint.h"
 #include "ubx_msg.h"
+#include "ubx_events.h"
 
+#define UBX_TYPE_LIST(l) l(UBX_TYPE, M0, 0x00) l(UBX_TYPE, M7, 0x07) l(UBX_TYPE, M8, 0x08) l(UBX_TYPE, M9, 0x09) l(UBX_TYPE, M10, 0x0A)
 typedef enum ubx_hw_e {
-    UBX_TYPE_M0 = (uint8_t)0,
-    UBX_TYPE_UNKNOWN = 0,
-    UBX_TYPE_M7 = 7,
-    UBX_TYPE_M8 = 8,
-    UBX_TYPE_M9 = 9,
-    UBX_TYPE_M10 = 10
+    UBX_TYPE_LIST(ENUM_VV)
 } ubx_hw_t;
-
-#define UBX_HW_TYPES { \
-    UBX_TYPE_M0,       \
-    UBX_TYPE_M7,       \
-    UBX_TYPE_M8,       \
-    UBX_TYPE_M9,       \
-    UBX_TYPE_M10       \
-}
-#define UBX_HW_TYPE_COUNT 5
-#define UBX_HW_TYPE_DEFAULT UBX_TYPE_UNKNOWN
-#define UBX_HW_TYPE_STRINGS { \
-    "M0",                    \
-    "M7",                    \
-    "M8",                    \
-    "M9",                    \
-    "M10"                    \
-}
-
+#define UBX_HW_COUNT 5
+#define UBX_HW_TYPE_DEFAULT UBX_TYPE_M0
+// extern const char * const ubx_hw_type_strings[];
 /**
  * @brief Navigation mode enum.
  *
@@ -53,101 +35,40 @@ typedef enum ubx_hw_e {
  *     - Pedestrian/Automotive/Sea
  *     - Airborne (1G, 2G and 4G max modes)
  */
+
+#define UBX_NAV_MODE_LIST(l) l(UBX_MODE_PORTABLE, 0x00) l(UBX_MODE_SEA, 0x01) l(UBX_MODE_AUTOMOTIVE, 0x02) l(UBX_MODE_STATIONARY, 0x03) l(UBX_MODE_PEDESTRIAN, 0x04) l(UBX_MODE_AIR_1G_MAX, 0x05) l(UBX_MODE_AIR_2G_MAX, 0x06) l(UBX_MODE_AIR_4G_MAX, 0x07)
 typedef enum ubx_nav_mode_e {
-    UBX_MODE_PORTABLE = (uint8_t)0,
-    UBX_MODE_SEA,
-    UBX_MODE_AUTOMOTIVE,
-    UBX_MODE_STATIONARY,
-    UBX_MODE_PEDESTRIAN,
-    UBX_MODE_AIR_1G_MAX,
-    UBX_MODE_AIR_2G_MAX,
-    UBX_MODE_AIR_4G_MAX
+    UBX_NAV_MODE_LIST(ENUM_V)
 } ubx_nav_mode_t;
 
+#define UBX_BAUD_RATE_LIST(l) l(UBX_BAUD_9600, 9600) l(UBX_BAUD_38400, 38400) l(UBX_BAUD_57600, 57600) l(UBX_BAUD_115200, 115200) l(UBX_BAUD_230400, 230400)
 typedef enum ubx_baud_rate_e {
-    UBX_BAUD_9600 = (uint32_t)9600,
-    UBX_BAUD_38400 = 38400,
-    UBX_BAUD_57600 = 57600,
-    UBX_BAUD_115200 = 115200,
-    UBX_BAUD_230400 = 230400
+    UBX_BAUD_RATE_LIST(ENUM_V)
 } ubx_baud_rate_t;
-
-#define UBX_BAUD_RATES { \
-    UBX_BAUD_9600,       \
-    UBX_BAUD_38400,      \
-    UBX_BAUD_57600,      \
-    UBX_BAUD_115200,     \
-    UBX_BAUD_230400      \
-}
 #define BAUD_RATE_COUNT 5
 #define UBX_BAUD_RATE_DEFAULT UBX_BAUD_38400
-#define UBX_BAUD_RATE_STRINGS { \
-    "9600",                    \
-    "38400",                   \
-    "57600",                   \
-    "115200",                  \
-    "230400"                   \
-}
 
 /**
  * @brief Message output rate enum.
  */
+#define UBX_OUTPUT_RATES_LIST(l) l(UBX_OUTPUT_1HZ, 0x01) l(UBX_OUTPUT_2HZ, 0x02) l(UBX_OUTPUT_5HZ, 0x05) l(UBX_OUTPUT_10HZ, 0x0a) l(UBX_OUTPUT_16HZ, 0x10) l(UBX_OUTPUT_20HZ, 0x14)
 typedef enum ubx_output_rate_e {
-    UBX_OUTPUT_1HZ = (uint8_t)1,
-    UBX_OUTPUT_2HZ = 2,
-    UBX_OUTPUT_5HZ = 5,
-    UBX_OUTPUT_10HZ = 10,
-    UBX_OUTPUT_16HZ = 16,
-    UBX_OUTPUT_20HZ = 20
+    UBX_OUTPUT_RATES_LIST(ENUM_V)
 } ubx_output_rate_t;
-
-#define UBX_OUTPUT_RATES { \
-    UBX_OUTPUT_1HZ,        \
-    UBX_OUTPUT_2HZ,        \
-    UBX_OUTPUT_5HZ,        \
-    UBX_OUTPUT_10HZ,       \
-    UBX_OUTPUT_16HZ,       \
-    UBX_OUTPUT_20HZ        \
-}
-#define OUTPUT_RATE_COUNT 5
+#define OUTPUT_RATE_COUNT 6
 #define UBX_OUTPUT_RATE_DEFAULT UBX_OUTPUT_10HZ
-#define UBX_OUTPUT_RATE_STRINGS { \
-    "1",                         \
-    "2",                         \
-    "5",                         \
-    "10",                        \
-    "16",                        \
-    "20"                         \
-}
 
 /**
  * @brief NMEA Messages enum.
  */
+#define UBX_MESSAGE_LIST(l) l(UBX_MSG_DTM, 0x0A) l(UBX_MSG_GBS, 0x09) l(UBX_MSG_GGA, 0x00) l(UBX_MSG_GLL, 0x01) l(UBX_MSG_GRS, 0x06) l(UBX_MSG_GSA, 0x02) l(UBX_MSG_GST, 0x07) l(UBX_MSG_GSV, 0x03) l(UBX_MSG_RMC, 0x04) l(UBX_MSG_VTG, 0x05) l(UBX_MSG_ZDA, 0x08)
 typedef enum ubx_message_e {
-    UBX_MSG_DTM = 0x0A,
-    UBX_MSG_GBS = 0x09,
-    UBX_MSG_GGA = 0x00,
-    UBX_MSG_GLL = 0x01,
-    UBX_MSG_GRS = 0x06,
-    UBX_MSG_GSA = 0x02,
-    UBX_MSG_GST = 0x07,
-    UBX_MSG_GSV = 0x03,
-    UBX_MSG_RMC = 0x04,
-    UBX_MSG_VTG = 0x05,
-    UBX_MSG_ZDA = 0x08
+    UBX_MESSAGE_LIST(ENUM_V)
 } ubx_message_t;
 
+#define UBX_MSG_TYPE_LIST(l) l(MT_NONE, 0x00) l(MT_NAV_DUMMY, 0x01) l(MT_NAV_PVT, 0x02) l(MT_NAV_ACK, 0x03) l(MT_NAV_NACK, 0x04) l(MT_NAV_ID, 0x05) l(MT_MON_GNSS, 0x06) l(MT_NAV_DOP, 0x07) l(MT_MON_VER, 0x08) l(MT_NAV_SAT, 0x09)
 typedef enum ubx_msg_type_e {
-    MT_NONE=(uint8_t)0,
-    MT_NAV_DUMMY,
-    MT_NAV_PVT,
-    MT_NAV_ACK,
-    MT_NAV_NACK,
-    MT_NAV_ID,
-    MT_MON_GNSS,
-    MT_NAV_DOP,
-    MT_MON_VER,
-    MT_NAV_SAT
+    UBX_MSG_TYPE_LIST(ENUM_V)
 } ubx_msg_type_t;
 
 #define UBX_EN_PIN_LEN 4
@@ -165,7 +86,7 @@ typedef struct ubx_rtc_config_s {
 } ubx_rtc_config_t;
 
 #define UBX_RTC_DEFAULT_CONFIG() {  \
-    .hw_type = UBX_TYPE_UNKNOWN,    \
+    .hw_type = UBX_TYPE_M0,    \
     .baud = UBX_BAUD_115200,        \
     .output_rate = UBX_OUTPUT_10HZ, \
     .nav_mode = UBX_MODE_SEA,       \
