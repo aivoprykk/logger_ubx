@@ -297,6 +297,8 @@ esp_err_t ubx_setup(ubx_config_t *ubx) {
     uint8_t try, max_tries=3;
     for(try = 0;try<=max_tries; ++try) {
         ret = ubx_get_hw_version(ubx);
+        if(ret == ESP_ERR_TIMEOUT)
+            goto fail;
         if(ret == ESP_OK)
             break;
     }
@@ -923,15 +925,13 @@ esp_err_t ubx_try_baud(ubx_msg_byte_ctx_t * mctx) {
             ubx->rtc_conf->baud = ubx_baud_rates[i-1];
             ret = ubx_uart_set_baud(ubx);
             if (ret != ESP_OK) {
-                if(ret == ESP_ERR_TIMEOUT || ret == ESP_ERR_INVALID_RESPONSE){
-                    if(i<=j)
-                        goto next;
-                    else
-                        return ret;
-                }
+                ESP_LOGW(TAG, "[%s] ubx_uart_set_baud failed: %s", __FUNCTION__, esp_err_to_name(ret));
             }
+            delay_ms(50);
         }
-        DLOG(TAG, "[%s] trying read initial data with %"PRIu32" baud", __FUNCTION__, ubx->rtc_conf->baud);
+#if (CONFIG_LOGGER_UBX_LOG_LEVEL < 2)
+        printf("[%s] try read initial data with %"PRIu32"\n", __FUNCTION__, ubx->rtc_conf->baud);
+#endif
         memset(mctx->msg, 0, mctx->msg_size);
         mctx->ubx = ubx;
         ret = read_ubx_msg(mctx); // just fill the msg buffer to check if we can read ubx or nmea message
@@ -940,10 +940,12 @@ esp_err_t ubx_try_baud(ubx_msg_byte_ctx_t * mctx) {
         while(q<(mctx->msg+mctx->msg_size) && *q) {
             p = (char *)q;
             if(*q == UBX_HDR_A && *(q+1) == UBX_HDR_B) {
+                ILOG(TAG, "[%s] found UBX message at %d with baud: %"PRIu32, __FUNCTION__, p-(char*)mctx->msg, ubx->rtc_conf->baud);
                 return ESP_OK;
                 break;
             }
             else if(*p == '$' && *(p+1) == 'G') {
+                ILOG(TAG, "[%s] found NMEA message at %d with baud: %"PRIu32, __FUNCTION__, p-(char*)mctx->msg, ubx->rtc_conf->baud);
                 return ESP_OK;
                 break;
             }
@@ -980,7 +982,6 @@ esp_err_t ubx_initial_read(ubx_config_t *ubx, bool get_hw) {
         ESP_LOGE(TAG, "[%s] ubx_try_baud failed: %s", __FUNCTION__, esp_err_to_name(ret));
         return ret;
     }
-    ILOG(TAG, "[%s] got: [%s]", __func__, msg);
     if(get_hw) {
         const char *p=0;
         if(!(p=strstr((const char *)&(msg[0]), "$GNTXT"))) {
