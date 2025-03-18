@@ -3,23 +3,12 @@
 
 // https://github.com/iforce2d/inavFollowme/blob/master/FollowMeTag/GPS.h
 
-#include <stdint.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// typedef struct nav_dummy_s {
-//     uint8_t cls;
-//     uint8_t id;
-//     uint16_t len;
-//     uint8_t msg_cls;
-//     uint8_t msg_id;
-//     uint8_t chkA;
-//     uint8_t chkB;
-// } nav_dummy_t;
-
-// #define NAV_DUMMY_DEFAULT {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+#include <stdint.h>
+#include <stdbool.h>
 
 typedef struct nav_pvt_s {  // 92 bytes payload, with Beitian BN220 100 bytes total ????(0xB5,0x62,....,chkA,chkB
     uint8_t cls;
@@ -410,6 +399,44 @@ typedef struct ubx_msg_s {  // was union, but messages are overwritten by next m
     .count_nav_pvt_prev = 0, \
     .count_nav_sat_prev = 0 \
 }
+
+struct ubx_msg_byte_ctx_s;
+struct ubx_config_s;
+
+typedef int (*ubx_msg_type_handler_cb)(struct ubx_msg_byte_ctx_s*);
+typedef int (*ubx_msg_ready_handler_cb)(struct ubx_msg_byte_ctx_s*);
+
+typedef struct ubx_msg_byte_ctx_s {
+    uint8_t * msg;
+    uint16_t msg_size;
+    uint16_t msg_len;
+    uint16_t msg_pos;
+    bool msg_match_to_pos;
+    bool expect_ubx_msg;
+    uint8_t ubx_msg_type;
+    ubx_msg_type_handler_cb msg_type_handler;
+    ubx_msg_ready_handler_cb msg_ready_handler;
+    struct ubx_msg_s * ubx_msg;
+} ubx_msg_byte_ctx_t;
+
+#define UBX_MSG_BYTE_CTX_DEFAULT(umsg) { \
+    .msg = &((umsg).none[0]),                     \
+    .msg_size = UBX_NONE_SIZE,                    \
+    .msg_len = 0,                    \
+    .msg_pos = 2,                    \
+    .msg_match_to_pos = true,       \
+    .expect_ubx_msg = true,       \
+    .ubx_msg_type = 0,               \
+    .msg_type_handler = ubx_msg_type_handler,        \
+    .msg_ready_handler = NULL,       \
+    .ubx_msg = &(umsg),                     \
+}
+
+
+int ubx_msg_handler(struct ubx_config_s *ubx_dev, ubx_msg_byte_ctx_t *);
+int ubx_msg_type_handler(ubx_msg_byte_ctx_t *);
+int ubx_msg_checksum_handler(ubx_msg_byte_ctx_t *);
+int ubx_msg_byte_ctx_reset(ubx_msg_byte_ctx_t *);
 
 #ifdef __cplusplus
 }

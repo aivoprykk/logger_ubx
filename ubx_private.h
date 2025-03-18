@@ -1,13 +1,17 @@
 #ifndef F77B6D3D_E33D_4ED3_B35C_5404E7A31138
 #define F77B6D3D_E33D_4ED3_B35C_5404E7A31138
 
-#include <stdint.h>
-#include <esp_err.h>
-#include "ubx.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+#include <string.h>
+#include <stdint.h>
+#include <esp_err.h>
+#include <stdbool.h>
+
+// #include "ubx.h"
 
 /*!< Timeout for the ubx message */
 #define MSG_READ_TIMEOUT 2000
@@ -64,72 +68,16 @@ extern "C" {
 #define SEC_UBX  0x03
 #define SEC_UBX_LEN 18
 
-#if (CONFIG_UBLOX_LOG_LEVEL <= 2)
-
-#include "esp_timer.h"
-#include "esp_log.h"
-
-#ifndef LOG_INFO
-#define LOG_INFO(a, b, ...) ESP_LOGI(a, b, __VA_ARGS__)
+#include "sdkconfig.h"
+#if defined(CONFIG_LOGGER_USE_GLOBAL_LOG_LEVEL)
+#define C_LOG_LEVEL LOGGER_GLOBAL_LOG_LEVEL
+#else
+#define C_LOG_LEVEL CONFIG_UBLOX_LOG_LEVEL
 #endif
-#ifndef MEAS_START
-#define MEAS_START() uint64_t _start = (esp_timer_get_time())
-#endif
-#ifndef MEAS_END
-#define MEAS_END(a, b, ...) \
-    ESP_LOGI(a, b, __VA_ARGS__, (esp_timer_get_time() - _start))
-#endif
-#endif
+#include "common_log.h"
 
-#if defined(CONFIG_UBLOX_LOG_LEVEL_TRACE) // "A lot of logs to give detailed information"
-
-#define DLOG LOG_INFO
-#define DMEAS_START MEAS_START
-#define DMEAS_END MEAS_END
-#define ILOG LOG_INFO
-#define IMEAS_START MEAS_START
-#define IMEAS_END MEAS_END
-#define WLOG LOG_INFO
-#define WMEAS_START MEAS_START
-#define WMEAS_END MEAS_END
-
-#elif defined(CONFIG_UBLOX_LOG_LEVEL_INFO) // "Log important events"
-
-#define DLOG(a, b, ...) ((void)0)
-#define DMEAS_START() ((void)0)
-#define DMEAS_END(a, b, ...) ((void)0)
-#define ILOG LOG_INFO
-#define IMEAS_START MEAS_START
-#define IMEAS_END MEAS_END
-#define WLOG LOG_INFO
-#define WMEAS_START MEAS_START
-#define WMEAS_END MEAS_END
-
-#elif defined(CONFIG_UBLOX_LOG_LEVEL_WARN) // "Log if something unwanted happened but didn't cause a problem"
-
-#define DLOG(a, b, ...) ((void)0)
-#define DMEAS_START() ((void)0)
-#define DMEAS_END(a, b, ...) ((void)0)
-#define ILOG(a, b, ...) ((void)0)
-#define IMEAS_START() ((void)0)
-#define IMEAS_END(a, b, ...) ((void)0)
-#define WLOG LOG_INFO
-#define WMEAS_START MEAS_START
-#define WMEAS_END MEAS_END
-
-#else // "Do not log anything"
-
-#define DLOG(a, b, ...) ((void)0)
-#define DMEAS_START() ((void)0)
-#define DMEAS_END(a, b, ...) ((void)0)
-#define ILOG(a, b, ...) ((void)0)
-#define IMEAS_START() ((void)0)
-#define IMEAS_END(a, b, ...) ((void)0)
-#define WLOG(a, b, ...) ((void)0)
-#define WMEAS_START() ((void)0)
-#define WMEAS_END(a, b, ...) ((void)0)
-#endif
-
+struct ubx_config_s;
+struct ubx_msg_byte_ctx_s;
 /* typedef struct ubx_user_msg_s {
     uint8_t cls;
     uint8_t id;
@@ -138,7 +86,7 @@ extern "C" {
 } ubx_user_msg_t;
 
 typedef struct ubx_user_ctx_s {
-    ubx_config_t *ubx;
+    struct ubx_config_s *ubx;
     ubx_user_msg_t *tx;
     ubx_user_msg_t *rx;
     uint8_t read_from_byte;
@@ -147,37 +95,32 @@ typedef struct ubx_user_ctx_s {
  */
 // prvate functions
 
-esp_err_t ubx_set_gnss(ubx_config_t *ubx, uint8_t mode);
-esp_err_t ubx_set_uart_out_rate(ubx_config_t *ubx);
+static esp_err_t ubx_set_gnss(struct ubx_config_s *ubx, uint8_t mode);
+static esp_err_t ubx_set_uart_out_rate(struct ubx_config_s *ubx);
 
-esp_err_t ubx_set_prot_msg_out(ubx_config_t *ubx, bool enable_nmea, bool enable_ubx);
-esp_err_t ubx_set_msgout(ubx_config_t *ubx);
-esp_err_t ubx_set_msgout_sat(ubx_config_t *ubx);
+static esp_err_t ubx_set_prot_msg_out(struct ubx_config_s *ubx, bool enable_nmea, bool enable_ubx);
+static esp_err_t ubx_set_msgout(struct ubx_config_s *ubx);
+static esp_err_t ubx_set_msgout_sat(struct ubx_config_s *ubx);
 
-esp_err_t ubx_get_hw_version(ubx_config_t *ubx);
-esp_err_t ubx_get_hw_id(ubx_config_t *ubx);
-esp_err_t ubx_get_gnss(ubx_config_t *ubx);
-esp_err_t ubx_get_nav_sat(ubx_config_t *ubx);
+static esp_err_t ubx_get_hw_version(struct ubx_config_s *ubx);
+static esp_err_t ubx_get_hw_id(struct ubx_config_s *ubx);
+static esp_err_t ubx_get_gnss(struct ubx_config_s *ubx);
+static esp_err_t ubx_get_nav_sat(struct ubx_config_s *ubx);
 
-esp_err_t ubx_initial_read(ubx_config_t *ubx, bool get_hw);
+static esp_err_t ubx_initial_read(struct ubx_config_s *ubx, bool get_hw);
 
-void payload_size(size_t value, uint8_t* buffer);
-uint8_t hex_char_to_uint8_t(char c);
-void hex_string_to_uint8_t(const char* hex_string, uint8_t* output, size_t output_size);
+static esp_err_t ubx_cfg_send_m(struct ubx_config_s *ubx, uint8_t * msg, size_t msg_len, bool need_ack);
+esp_err_t send_ubx_cfg_msg(struct ubx_config_s *ubx, uint8_t cls, uint8_t id, const uint8_t * payload, size_t payload_len, bool need_ack);
+esp_err_t ubx_cfg_valset(struct ubx_config_s *ubx, const uint8_t * cfg, size_t payload_len, bool need_ack);
+esp_err_t ubx_cfg_get(struct ubx_config_s *ubx, struct ubx_msg_byte_ctx_s * ubx_packet);
+static esp_err_t ubx_uart_set_baud(struct ubx_config_s *ubx);
+static esp_err_t ubx_set_uart_baud_rate(struct ubx_config_s *ubx, uint32_t baud);
 
-esp_err_t ubx_cfg_send_m(ubx_config_t *ubx, uint8_t * msg, size_t msg_len, bool need_ack);
-esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx, uint8_t cls, uint8_t id, const uint8_t * payload, size_t payload_len, bool need_ack);
-esp_err_t ubx_cfg_valset(ubx_config_t *ubx, const uint8_t * cfg, size_t payload_len, bool need_ack);
-esp_err_t ubx_cfg_get(ubx_msg_byte_ctx_t * mctx);
-esp_err_t ubx_uart_set_baud(ubx_config_t *ubx);
-esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, uint32_t baud);
+esp_err_t write_ubx_msg(int uart_num, uint8_t *msg, size_t msg_len, bool need_checksum);
 
-void decode_uint16(const uint8_t* hex_string, uint16_t *output);
+esp_err_t read_ubx_msg(struct ubx_config_s *ubx_dev, struct ubx_msg_byte_ctx_s * ubx_packet);
 
-esp_err_t write_ubx_msg(const ubx_config_t *ubx, uint8_t *msg, size_t msg_len, bool need_checksum);
-
-esp_err_t read_ubx_msg(ubx_msg_byte_ctx_t * mctx);
-void print_ubx_msg(ubx_msg_byte_ctx_t * mctx);
+void print_ubx_msg(struct ubx_msg_byte_ctx_s * ubx_packet);
 /**
  * @brief Gets the acknowledge of configuration message.
  * 
@@ -193,7 +136,7 @@ void print_ubx_msg(ubx_msg_byte_ctx_t * mctx);
  *     - ESP_INVALID_RESPONSE  NAK received
  *     - ESP_ERR_INVALID_CRC   Checksum for the wrong message received
  */
-esp_err_t ack_status(ubx_config_t *ubx, uint8_t cls_id, uint8_t msg_id);
+esp_err_t ack_status(struct ubx_config_s *ubx, uint8_t cls_id, uint8_t msg_id);
 
 /**
  * @brief Adds checksum to the message to be sent.
@@ -202,8 +145,92 @@ esp_err_t ack_status(ubx_config_t *ubx, uint8_t cls_id, uint8_t msg_id);
  */
 void add_checksum(uint8_t *message, uint16_t size, uint8_t *CK_A, uint8_t *CK_B);
 
+/**
+ * @brief Deinitializes the serial communication for the GPS.
+ *
+ * @param *ubx is the address of GPS configuration structure.
+ * 
+ * @return
+ *     - ESP_OK   Success
+ *     - ESP_FAIL Parameter error
+ */
+static esp_err_t ubx_uart_deinit(struct ubx_config_s *ubx);
+
+/**
+ * @brief Initializes the serial communication for the GPS.
+ *
+ * @details PPS pin function not implemented yet.
+ *
+ * @param *ubx is the address of GPS configuration structure.
+ * 
+ * @return
+ *     - ESP_OK   Success
+ *     - ESP_FAIL Parameter error
+ */
+static esp_err_t ubx_uart_init(struct ubx_config_s *ubx);
+
+/**
+ * @brief Initializes the GPS enable pins.
+ *
+ * @param *ubx is the address of the GPS configuration structure.
+ * 
+ * @return
+ *     - ESP_OK   Success
+ *     - ESP_FAIL Parameter error
+ */
+static esp_err_t ubx_pins_init(struct ubx_config_s *ubx);
+
+/**
+ * @brief Deinitializes the GPS enable pins.
+ *
+ * @param *ubx is the address of the GPS configuration structure.
+ * 
+ * @return
+ *     - ESP_OK   Success
+ *     - ESP_FAIL Parameter error
+ */
+static esp_err_t ubx_pins_deinit(struct ubx_config_s *ubx);
+
+/**
+ * @brief Initializes the GPS configuration structure.
+ * 
+ * @param *ubx is the address of the GPS configuration structure.
+ * 
+ * @return
+ *    - ESP_OK   Success
+ *   - ESP_FAIL Parameter error
+*/
+static esp_err_t ubx_config_init(struct ubx_config_s *ubx);
+
+/**
+ * @brief Deinitializes the GPS configuration structure.
+ * 
+ * @param *ubx is the address of the GPS configuration structure.
+*/
+static esp_err_t ubx_config_deinit(struct ubx_config_s *ubx);
+
 #ifdef __cplusplus
 }
 #endif
+
+inline esp_err_t encode_uint32(uint8_t *buf, uint32_t value) {
+    uint32_t n = value;
+    buf[0] = n & 0xFF;
+    buf[1] = (n >> 8) & 0xFF;
+    buf[2] = (n >> 16) & 0xFF;
+    buf[3] = (n >> 24) & 0xFF;
+    return ESP_OK;
+}
+
+inline esp_err_t encode_uint16(uint8_t *buf, uint16_t value) {
+    uint16_t n = value;
+    buf[0] = n & 0xFF;
+    buf[1] = (n >> 8) & 0xFF;
+    return ESP_OK;
+}
+
+inline void decode_uint16(const uint8_t* hex_string, uint16_t *output) {
+    *output = (*(hex_string) + (*(hex_string+1) << 8));
+}
 
 #endif /* F77B6D3D_E33D_4ED3_B35C_5404E7A31138 */

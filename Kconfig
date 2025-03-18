@@ -1,44 +1,51 @@
 menu "Logger Ublox GPS Module Configuration"
+    config UBLOX_ENABLED
+        bool "Enable logger_ubx module"
+        default y
+        help
+            Enable logger_ubx module.
+    if UBLOX_ENABLED
     config UBLOX_UART_PORT
-            int "GPS Uart port number"
+            int "GPS Uart port"
             default 2 if HAS_BOARD_LILYGO_T_DISPLAY_S3
             default 1
             help
-            Specify the Port Pin for GPS UART.
-    menu "Ublox GPS Uart pins"
+            Specify the GPS Uart Port
+    menu "GPS Uart pins"
     comment "GPS send and transmit pin configuration"
         config UBLOX_UART_RXD
             int "GPS Uart Rxd"
             default 18 if HAS_BOARD_LILYGO_T_DISPLAY_S3
             default 32
             help
-            Specify the Recieve Pin for GPS UART.
+            Specify the GPS UART Recieve Pin.
         config UBLOX_UART_TXD
             int "GPS Uart Txd"
             default 17 if HAS_BOARD_LILYGO_T_DISPLAY_S3
             default 33
             help
-            Specify the transmit pin for GPS UART.
+            Specify the GPS UART transmit pin
     endmenu
     menu "GPS Power pin(s)"
+    comment "GPS power pin configuration"
         config UBLOX_UART_PWR_1
             int "GPS main power pin"
             default 21 if HAS_BOARD_LILYGO_T_DISPLAY_S3
             default 25
             help
-            Specify the power pin for GPS UART.
+            Specify the GPS UART power pin 1.
         config UBLOX_UART_PWR_2
             int "GPS secondary power pin"
             default 16 if HAS_BOARD_LILYGO_T_DISPLAY_S3
             default 26
             help
-            Specify the power pin 2 for GPS UART: needed for esp32 as one pin could transfer 50ma power.
+            Specify the GPS UART power pin 2: needed for esp32 as one pin could transfer 50ma power.
         config UBLOX_UART_PWR_3
             int "GPS 2. secondary power pin"
             default -1 if HAS_BOARD_LILYGO_T_DISPLAY_S3
             default 27
             help
-            Specify the power pin 3 for GPS UART: needed for esp32 as one pin could transfer 50ma power.
+            Specify the GPS UART power pin 3: needed for esp32 as one pin could transfer 50ma power.
     endmenu
     choice
         bool "Default log verbosity"
@@ -66,4 +73,5 @@ menu "Logger Ublox GPS Module Configuration"
         default 3 if UBLOX_LOG_LEVEL_ERROR
         default 4 if UBLOX_LOG_LEVEL_USER
         default 5 if UBLOX_LOG_LEVEL_NONE
+    endif
 endmenu

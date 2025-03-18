@@ -11,13 +11,11 @@
 extern "C" {
 #endif
 
-#include "driver/gpio.h"
-#include "driver/uart.h"
-#include "esp_err.h"
-#include "stdbool.h"
-#include "stdint.h"
-#include "ubx_msg.h"
+#include "sdkconfig.h"
+#if defined(CONFIG_UBLOX_ENABLED)
+
 #include "ubx_events.h"
+#include "ubx_msg.h"
 
 #define UBX_TYPE_LIST(l) l(UBX_TYPE, M0, 0x00) l(UBX_TYPE, M7, 0x07) l(UBX_TYPE, M8, 0x08) l(UBX_TYPE, M9, 0x09) l(UBX_TYPE, M10, 0x0A)
 typedef enum ubx_hw_e {
@@ -25,6 +23,14 @@ typedef enum ubx_hw_e {
 } ubx_hw_t;
 #define UBX_HW_COUNT 5
 #define UBX_HW_TYPE_DEFAULT UBX_TYPE_M0
+
+
+#include "driver/gpio.h"
+#include "driver/uart.h"
+#include "esp_err.h"
+#include "stdbool.h"
+#include "stdint.h"
+
 // extern const char * const ubx_hw_type_strings[];
 /**
  * @brief Navigation mode enum.
@@ -74,24 +80,24 @@ typedef enum ubx_msg_type_e {
 #define UBX_EN_PIN_LEN 4
 
 typedef struct ubx_rtc_config_s {
-    ubx_hw_t hw_type;
     uint32_t baud;
-    ubx_output_rate_t output_rate;
-    ubx_nav_mode_t nav_mode;
+    ubx_hw_t hw_type;
     uint8_t hw_id[6];
     uint8_t prot_ver;
+    ubx_output_rate_t output_rate;
+    ubx_nav_mode_t nav_mode;
     uint8_t gnss;
     uint8_t gnss_count;
     bool msgout_sat;
 } ubx_rtc_config_t;
 
 #define UBX_RTC_DEFAULT_CONFIG() {  \
-    .hw_type = UBX_TYPE_M0,    \
     .baud = UBX_BAUD_115200,        \
-    .output_rate = UBX_OUTPUT_10HZ, \
-    .nav_mode = UBX_MODE_SEA,       \
+    .hw_type = UBX_TYPE_M0,    \
     .hw_id = {0},                   \
     .prot_ver = 0,                  \
+    .output_rate = UBX_OUTPUT_10HZ, \
+    .nav_mode = UBX_MODE_SEA,       \
     .gnss = 111, /* 01101111 */      \
     .gnss_count = 4,                \
     .msgout_sat = true,            \
@@ -115,17 +121,15 @@ typedef struct ubx_config_s {
     bool config_ok;
     bool config_progress;
     bool ready;
-    bool time_set;
-    bool signal_ok;
-    bool is_on;
-    uint16_t first_fix;
-    uint32_t next_time_sync;
     uint32_t ready_time;
+    bool is_on;
+    SemaphoreHandle_t xMutex;
 } ubx_config_t;
 
 /**
  * @brief Default GPS configuration structure.
  */
+
 #define UBX_DEFAULT_CONFIG() {                        \
     .uart_num = CONFIG_UBLOX_UART_PORT,               \
     .tx_pin = CONFIG_UBLOX_UART_TXD,                  \
@@ -146,42 +150,9 @@ typedef struct ubx_config_s {
     .config_ok = false,                               \
     .config_progress = false,                         \
     .ready = false,                                \
-    .time_set = false,                                \
-    .signal_ok = false,                               \
     .is_on = false,                                  \
-    .first_fix = 0,                                   \
-    .next_time_sync = 0,                              \
-    .ready_time = 0,                                    \
-}
-
-struct ubx_msg_byte_ctx_s;
-
-typedef esp_err_t (*ubx_handler_cb)(struct ubx_msg_byte_ctx_s*);
-
-typedef struct ubx_msg_byte_ctx_s {
-    uint8_t * msg;
-    uint16_t msg_size;
-    uint16_t msg_len;
-    uint16_t msg_pos;
-    bool msg_match_to_pos;
-    bool expect_ubx_msg;
-    uint8_t ubx_msg_type;
-    ubx_handler_cb msg_type_handler;
-    ubx_handler_cb msg_ready_handler;
-    ubx_config_t * ubx;
-} ubx_msg_byte_ctx_t;
-
-#define UBX_MSG_BYTE_CTX_DEFAULT() { \
-    .msg = &(ubx->ubx_msg.none[0]),                     \
-    .msg_size = UBX_NONE_SIZE,                    \
-    .msg_len = 0,                    \
-    .msg_pos = 2,                    \
-    .msg_match_to_pos = true,       \
-    .expect_ubx_msg = true,       \
-    .ubx_msg_type = 0,               \
-    .msg_type_handler = ubx_msg_type_handler,        \
-    .msg_ready_handler = NULL,       \
-    .ubx = ubx,                     \
+    .ready_time = 0,                                \
+    .xMutex = NULL                                   \
 }
 
 /**
@@ -203,70 +174,6 @@ ubx_config_t * ubx_config_new();
  *     - ESP_FAIL Parameter error
  */
 esp_err_t ubx_config_delete(ubx_config_t *ubx);
-
-/**
- * @brief Initializes the GPS configuration structure.
- * 
- * @param *ubx is the address of the GPS configuration structure.
- * 
- * @return
- *    - ESP_OK   Success
- *   - ESP_FAIL Parameter error
-*/
-esp_err_t ubx_config_init(ubx_config_t *ubx);
-
-/**
- * @brief Deinitializes the GPS configuration structure.
- * 
- * @param *ubx is the address of the GPS configuration structure.
-*/
-esp_err_t ubx_config_deinit(ubx_config_t *ubx);
-
-/**
- * @brief Initializes the serial communication for the GPS.
- *
- * @details PPS pin function not implemented yet.
- *
- * @param *ubx is the address of GPS configuration structure.
- * 
- * @return
- *     - ESP_OK   Success
- *     - ESP_FAIL Parameter error
- */
-esp_err_t ubx_uart_init(ubx_config_t *ubx);
-
-/**
- * @brief Deinitializes the serial communication for the GPS.
- *
- * @param *ubx is the address of GPS configuration structure.
- * 
- * @return
- *     - ESP_OK   Success
- *     - ESP_FAIL Parameter error
- */
-esp_err_t ubx_uart_deinit(ubx_config_t *ubx);
-
-/**
- * @brief Initializes the GPS enable pins.
- *
- * @param *ubx is the address of the GPS configuration structure.
- * 
- * @return
- *     - ESP_OK   Success
- *     - ESP_FAIL Parameter error
- */
-esp_err_t ubx_pins_init(ubx_config_t *ubx);
-
-/**
- * @brief Deinitializes the GPS enable pins.
- *
- * @param *ubx is the address of the GPS configuration structure.
- * 
- * @return
- *     - ESP_OK   Success
- *     - ESP_FAIL Parameter error
- */
-esp_err_t ubx_pins_deinit(ubx_config_t *ubx);
 
 /**
  * @brief Powers on the GPS.
@@ -306,73 +213,6 @@ esp_err_t ubx_off(ubx_config_t *ubx);
  */
 esp_err_t ubx_set_nav_mode(ubx_config_t *ubx, ubx_nav_mode_t nav_mode);
 
-/**
- * @brief Sets the GPS message output rate.
- *
- * @param *ubx is the address of the GPS configuration structure.
- *
- * @return
- *     - ESP_OK                Success
- *     - ESP_ERR_INVALID_ARG   Invalid rate parameter
- *     - ESP_FAIL              Not all bytes sent
- *     - ESP_FAIL              Parameter error
- *     - ESP_ERR_TIMEOUT       Not all bytes read
- *     - ESP_ERR_TIMEOUT       No ACK received within ACK_TIMEOUT
- *     - ESP_INVALID_RESPONSE  NAK received
- *     - ESP_ERR_INVALID_CRC   Checksum for the wrong message received
- */
-esp_err_t ubx_set_output_rate(ubx_config_t *ubx);
-
-/**
- * @brief Sets the GPS message rate to be output.
- *
- * @param *ubx is the address of the GPS configuration structure.
- * @param rate is the NMEA message.
- * @param active is if the message will be output.
- *
- * @return
- *     - ESP_OK                Success
- *     - ESP_FAIL              Not all bytes sent
- *     - ESP_FAIL              Parameter error
- *     - ESP_ERR_TIMEOUT       Not all bytes read
- *     - ESP_ERR_TIMEOUT       No ACK received within ACK_TIMEOUT
- *     - ESP_INVALID_RESPONSE  NAK received
- *     - ESP_ERR_INVALID_CRC   Checksum for the wrong message received
- */
-esp_err_t ubx_set_message_rate(ubx_config_t *ubx, ubx_message_t message, bool active);
-
-/**
- * @brief Set ublox to output UBX messages only.
- * 
- * @param *ubx is the address of the GPS configuration structure.
- * 
- * @return
- *   - ESP_OK                Success
- *   - ESP_FAIL              Not all bytes sent
-*/
-esp_err_t ubx_set_ubxout(ubx_config_t *ubx);
-
-/**
- * @brief Ubx message handler
- * 
- * @param *ubx is the address of the GPS configuration structure.
- * @param *arg is the address of the message handler.
- * 
-    * @return
-    *  - ESP_OK                Success
-    * - ESP_FAIL              Not all bytes sent
-    * - ESP_FAIL              Parameter error
-    * - ESP_ERR_TIMEOUT       Not all bytes read
-    * - ESP_ERR_TIMEOUT       No ACK received within ACK_TIMEOUT
-    * - ESP_INVALID_RESPONSE  NAK received
-    * - ESP_ERR_INVALID_CRC   Checksum for the wrong message received
-    * - ESP_ERR_INVALID_ARG   Invalid rate parameter
-*/
-esp_err_t ubx_msg_handler(ubx_msg_byte_ctx_t *);
-esp_err_t ubx_msg_type_handler(ubx_msg_byte_ctx_t * mctx);
-esp_err_t ubx_msg_checksum_handler(ubx_msg_byte_ctx_t * mctx);
-esp_err_t ubx_msg_byte_ctx_reset(ubx_msg_byte_ctx_t * mctx);
-
 int8_t ubx_set_time(ubx_config_t *ubx, float time_offset);
 
 esp_err_t ubx_setup(ubx_config_t *ubx);
@@ -380,6 +220,10 @@ esp_err_t ubx_setup(ubx_config_t *ubx);
 const char * ubx_chip_str(const ubx_config_t *ubx);
 
 const char * ubx_baud_str(const ubx_config_t *ubx);
+
+extern ubx_rtc_config_t rtc_config;
+
+#endif
 
 #ifdef __cplusplus
 }

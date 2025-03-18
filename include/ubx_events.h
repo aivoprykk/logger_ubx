@@ -28,7 +28,7 @@ enum {
     UBX_EVENT_LIST(ENUM)
 };
 
- extern const char * const ubx_event_strings[];
+ const char * ubx_event_strings(int id);
 
 #ifdef __cplusplus
 }
