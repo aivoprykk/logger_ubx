@@ -531,7 +531,7 @@ void print_ubx_msg(ubx_msg_byte_ctx_t * ubx_packet) {
 }
 
 esp_err_t ack_status(ubx_config_t *ubx_dev, uint8_t cls_id, uint8_t msg_id) {
-    DLOG(TAG, "[%s]", __func__);
+    DLOG(TAG, "[%s]\n", __func__);
     esp_err_t ret = ESP_OK;
     ubx_dev->ubx_msg.navAck.msg_cls = cls_id;
     ubx_dev->ubx_msg.navAck.msg_id = msg_id;

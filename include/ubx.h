@@ -86,6 +86,7 @@ typedef struct ubx_rtc_config_s {
     uint8_t prot_ver;
     ubx_output_rate_t output_rate;
     ubx_nav_mode_t nav_mode;
+    uint8_t nav_mode_auto;
     uint8_t gnss;
     uint8_t gnss_count;
     bool msgout_sat;
@@ -97,7 +98,8 @@ typedef struct ubx_rtc_config_s {
     .hw_id = {0},                   \
     .prot_ver = 0,                  \
     .output_rate = UBX_OUTPUT_10HZ, \
-    .nav_mode = UBX_MODE_SEA,       \
+    .nav_mode = UBX_MODE_PEDESTRIAN,       \
+    .nav_mode_auto = 1,             \
     .gnss = 111, /* 01101111 */      \
     .gnss_count = 4,                \
     .msgout_sat = true,            \
@@ -212,6 +214,8 @@ esp_err_t ubx_off(ubx_config_t *ubx);
  *     - ESP_ERR_INVALID_CRC   Checksum for the wrong message received
  */
 esp_err_t ubx_set_nav_mode(ubx_config_t *ubx, ubx_nav_mode_t nav_mode);
+
+uint8_t ubx_nav_mode_auto(ubx_config_t *ubx);
 
 int8_t ubx_set_time(ubx_config_t *ubx, float time_offset);
 
