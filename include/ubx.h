@@ -42,6 +42,10 @@ typedef enum ubx_hw_e {
  *     - Airborne (1G, 2G and 4G max modes)
  */
 
+#define UBX_GNSS_LIST(l) l(UBX_GNSS_GPS, 0x00) l(UBX_GNSS_SBAS, 0x01) l(UBX_GNSS_GALILEO, 0x02) l(UBX_GNSS_BEIDOU, 0x03) l(UBX_GNSS_QZSS, 0x05) l(UBX_GNSS_GLONASS, 0x06) l(UBX_GNSS_NAVIC, 0x07)
+typedef enum ubx_gnss_e {
+    UBX_GNSS_LIST(ENUM_V)
+} ubx_gnss_t;
 #define UBX_NAV_MODE_LIST(l) l(UBX_MODE_PORTABLE, 0x00) l(UBX_MODE_SEA, 0x01) l(UBX_MODE_AUTOMOTIVE, 0x02) l(UBX_MODE_STATIONARY, 0x03) l(UBX_MODE_PEDESTRIAN, 0x04) l(UBX_MODE_AIR_1G_MAX, 0x05) l(UBX_MODE_AIR_2G_MAX, 0x06) l(UBX_MODE_AIR_4G_MAX, 0x07)
 typedef enum ubx_nav_mode_e {
     UBX_NAV_MODE_LIST(ENUM_V)
@@ -80,7 +84,7 @@ typedef enum ubx_msg_type_e {
 #define UBX_EN_PIN_LEN 4
 
 typedef struct ubx_rtc_config_s {
-    uint32_t baud;
+    int baud;
     ubx_hw_t hw_type;
     uint8_t hw_id[6];
     uint8_t prot_ver;

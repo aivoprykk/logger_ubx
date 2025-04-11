@@ -251,9 +251,9 @@ static esp_err_t fix_config(ubx_config_t *ubx_dev) {
     uint8_t gnss_count = 1;
     if(gnss<=5) ubx_dev->rtc_conf->gnss = gnss = ubx_dev->rtc_conf->hw_type >= UBX_TYPE_M9 ? 111 : 103;
     if(ubx_dev->rtc_conf->gnss == 111 && ubx_dev->rtc_conf->hw_type < UBX_TYPE_M9) ubx_dev->rtc_conf->gnss = gnss = 103;
-    if((gnss & (1 << 2)) != 0) ++gnss_count; // galileo
-    if((gnss & (1 << 3)) != 0) ++gnss_count; // beidou
-    if((gnss & (1 << 6)) != 0) ++gnss_count; // glonass
+    if(BIT_GET(gnss, UBX_GNSS_GALILEO) != 0) ++gnss_count; // galileo
+    if(BIT_GET(gnss, UBX_GNSS_BEIDOU) != 0) ++gnss_count; // beidou
+    if(BIT_GET(gnss, UBX_GNSS_GLONASS) != 0) ++gnss_count; // glonass
     if(gnss_count > 4) gnss_count = 4;
     ubx_dev->rtc_conf->gnss_count = gnss_count;
     if(ubx_dev->rtc_conf->hw_type == UBX_TYPE_M8){
@@ -484,7 +484,7 @@ static esp_err_t ubx_set_prot_msg_out(ubx_config_t *ubx, bool enable_nmea, bool 
                                   }, 20, true);
 }
 
-static esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, uint32_t baud) {
+static esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, int baud) {
     ILOG(TAG, "[%s]", __func__);
     if(baud == ubx->rtc_conf->baud){
 #if (C_LOG_LEVEL < 2)
@@ -524,7 +524,7 @@ static esp_err_t ubx_set_uart_out_rate(ubx_config_t *ubx) {
     ILOG(TAG, "[%s]", __func__);
     esp_err_t ret = ESP_OK;
     uint8_t output_vec[2]={0,0};
-    uint32_t baud = UBX_BAUD_38400;
+    int baud = UBX_BAUD_38400;
 
     encode_uint16(&(output_vec[0]), (1000/ubx->rtc_conf->output_rate));
     if(ubx->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
@@ -570,19 +570,19 @@ static esp_err_t ubx_set_gnss(ubx_config_t *ubx, uint8_t mode) {
     uint8_t enable_qzss = 0x01; // jp qzss
     uint8_t enable_glonass = 0x00; // ru glonass
     
-    if((mode & (1 << 1)) == 0) {
+    if(BIT_GET(mode, UBX_GNSS_SBAS) == 0) {
         enable_sbas=0x00;
     }
-    if((mode & (1 << 2)) != 0) {
+    if(BIT_GET(mode, UBX_GNSS_GALILEO) != 0) {
         enable_galileo=0x01;
     }
-    if((mode & (1 << 3)) != 0) {
+    if(BIT_GET(mode, UBX_GNSS_BEIDOU) != 0) {
         enable_beidou=0x01;
     }
-    if((mode & (1 << 5)) == 0) {
+    if(BIT_GET(mode, UBX_GNSS_QZSS) == 0) {
         enable_qzss=0x00;
     }
-    if((mode & (1 << 6)) != 0) {
+    if(BIT_GET(mode, UBX_GNSS_GLONASS) != 0) {
         enable_glonass=0x01;
     }
     if(ubx->rtc_conf->gnss_count < 1) {
@@ -738,7 +738,9 @@ static esp_err_t ubx_uart_save_cfg(ubx_config_t *ubx) {
 }
 
 static esp_err_t ubx_uart_set_baud(ubx_config_t *ubx_dev) {
-    ILOG(TAG, "[%s] %lu", __func__, ubx_dev->rtc_conf->baud);
+#if (C_LOG_LEVEL < 3)
+   ILOG(TAG, "[%s] %d", __func__, ubx_dev->rtc_conf->baud);
+#endif
     esp_err_t ret = ESP_OK;
     delay_ms(10);
     if(xSemaphoreTake(ubx_dev->xMutex, portMAX_DELAY) == pdTRUE) {
@@ -806,9 +808,11 @@ static esp_err_t ubx_get_hw_id(ubx_config_t *ubx) {
         return ret;
     }
     memcpy(&(ubx->rtc_conf->hw_id[0]), msg+8, 6);
-    for(int i=0; i<6; ++i) {
+#if (C_LOG_LEVEL < 3)
+   for(int i=0; i<6; ++i) {
         ILOG(TAG, "hw id[%d]: [%"PRIu8"]", i, *(msg + 8 + i));
     }
+#endif
     return ESP_OK;
 }
 
@@ -859,7 +863,7 @@ static esp_err_t ubx_try_baud(ubx_config_t *ubx, ubx_msg_byte_ctx_t * ubx_packet
             ret = ubx_uart_set_baud(ubx);
 #if (C_LOG_LEVEL < 2)
           if (ret != ESP_OK) {
-                ESP_LOGW(TAG, "[%s] ubx_uart_set_baud failed: %s", __FUNCTION__, esp_err_to_name(ret));
+                WLOG(TAG, "[%s] ubx_uart_set_baud failed: %s", __FUNCTION__, esp_err_to_name(ret));
             }
 #endif
             delay_ms(50);
@@ -893,7 +897,7 @@ static esp_err_t ubx_try_baud(ubx_config_t *ubx, ubx_msg_byte_ctx_t * ubx_packet
         
         if (ret != ESP_OK || !*(ubx_packet->msg+3)) {
 #if (C_LOG_LEVEL < 3)
-            WLOG(TAG, "[%s] %"PRIu32" failed: %s", __FUNCTION__, ubx->rtc_conf->baud, esp_err_to_name(ret));
+            WLOG(TAG, "[%s] %d failed: %s", __FUNCTION__, ubx->rtc_conf->baud, esp_err_to_name(ret));
 #endif
             if(i<=j) {
                 continue;

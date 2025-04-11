@@ -17,56 +17,74 @@ extern "C" {
 #define MSG_READ_TIMEOUT 2000
 
 /*!< UBX Protocol headers */
-#define UBX_HDR_A 0xB5
-#define UBX_HDR_B 0x62
+enum ubx_hdr_e {
+    UBX_HDR_A = 0xB5,
+    UBX_HDR_B = 0x62
+};
+
 #define UBX_HDR {UBX_HDR_A, UBX_HDR_B}
 
 /*!< UBX Message classes */
-#define CLS_NONE 0x00
-#define CLS_NAV  0x01
-#define CLS_INF  0x04
-#define CLS_ACK  0x05
-#define CLS_CFG  0x06
-#define CLS_LOG  0x21
-#define CLS_SEC  0x27
-#define CLS_MON  0x0A
+enum ubx_cls_e {
+    CLS_NONE = 0x00,
+    CLS_NAV = 0x01,
+    CLS_INF = 0x04,
+    CLS_ACK = 0x05,
+    CLS_CFG = 0x06,
+    CLS_LOG = 0x21,
+    CLS_SEC = 0x27,
+    CLS_MON = 0x0A
+};
 
 /*!< None Message IDs */
 #define NONE_NONE 0x00
 
 /*!< ACK Message IDs */
-#define ACK_ACK 0x01
-#define ACK_NAK 0x00
+enum ubx_ack_e {
+    ACK_ACK = 0x01,
+    ACK_NAK = 0x00
+};
 
 /*!< NAV Message IDs */
-#define NAV_DOP 0x04
-#define NAV_PVT 0x07
-#define NAV_CLK 0x22
-#define NAV_SAT 0x35
+enum ubx_nav_e {
+    NAV_POSLLH = 0x02,
+    NAV_STATUS = 0x03,
+    NAV_DOP = 0x04,
+    NAV_PVT = 0x07,
+    NAV_TIMEUTC = 0x01,
+    NAV_SVINFO = 0x30,
+    NAV_SAT = 0x35
+};
 #define NAV_SAT_LEN 1120
 
 /*!< CFG Message IDs */
-#define CFG_PRT  0x00
-#define CFG_MSG  0x01
-#define CFG_RATE 0x08
-#define CFG_CFG  0x09
-#define CFG_NMEA 0x17
-#define CFG_NAV5 0x24
-#define CFG_VALSET 0x8a
-#define CFG_VALGET 0x8b
-#define CFG_VALDEL 0x8c
-#define CFG_GNSS 0x3e
+enum ubx_cfg_e {
+    CFG_PRT = 0x00,
+    CFG_MSG = 0x01,
+    CFG_RATE = 0x08,
+    CFG_CFG = 0x09,
+    CFG_NMEA = 0x17,
+    CFG_NAV5 = 0x24,
+    CFG_VALSET = 0x8a,
+    CFG_VALGET = 0x8b,
+    CFG_VALDEL = 0x8c,
+    CFG_GNSS = 0x3e
+};
 
 /*!< MON Message IDs */
-#define MON_GNSS 0x28
-#define MON_GNSS_LEN 16
-#define MON_VER  0x04
-#define MON_VER_LEN 228
-#define MON_HW   0x09
+enum ubx_mon_e {
+    MON_VER = 0x04,
+    MON_HW = 0x09,
+    MON_GNSS = 0x28,
+    MON_MSGPP = 0x06,
+    MON_COMMS = 0x36
+};
 
 /*!< SEC Message IDs */
-#define SEC_UBX  0x03
-#define SEC_UBX_LEN 18
+enum ubx_sec_e {
+    SEC_UBX = 0x01,
+    SEC_KEY = 0x02
+};
 
 #include "sdkconfig.h"
 #if (defined(CONFIG_LOGGER_USE_GLOBAL_LOG_LEVEL) && CONFIG_LOGGER_GLOBAL_LOG_LEVEL < CONFIG_UBLOX_LOG_LEVEL)
@@ -114,7 +132,7 @@ esp_err_t send_ubx_cfg_msg(struct ubx_config_s *ubx, uint8_t cls, uint8_t id, co
 esp_err_t ubx_cfg_valset(struct ubx_config_s *ubx, const uint8_t * cfg, size_t payload_len, bool need_ack);
 esp_err_t ubx_cfg_get(struct ubx_config_s *ubx, struct ubx_msg_byte_ctx_s * ubx_packet);
 static esp_err_t ubx_uart_set_baud(struct ubx_config_s *ubx);
-static esp_err_t ubx_set_uart_baud_rate(struct ubx_config_s *ubx, uint32_t baud);
+static esp_err_t ubx_set_uart_baud_rate(struct ubx_config_s *ubx, int baud);
 
 esp_err_t write_ubx_msg(int uart_num, uint8_t *msg, size_t msg_len, bool need_checksum);
 

@@ -15,10 +15,10 @@
 #define LOG_MSG_BITS 0
 #define LOG_MSG_JSON 0
 
-#define BITVAL(a, b) ((a >> b) & 0x01)
-#define BITS(a, b, c) ((a >> b) & ((1 << c) - 1))
+#define BITVAL(a, b) ((a >> b) & 1u)
+#define BITS(a, b, c) ((a >> b) & ((1u << c) - 1u))
 #define BITS_FROM_U8(source,lsb,msb) \
-    ((uint8_t)((source) & ((uint8_t)(((uint8_t)(0xFF >> ((uint8_t)(7-((uint8_t)(msb) & 7))))) & ((uint8_t)(0xFF << ((uint8_t)(lsb) & 7)))))))
+    ((uint8_t)((source) & ((uint8_t)(((uint8_t)(0xFFu >> ((uint8_t)(7u-((uint8_t)(msb) & 7u))))) & ((uint8_t)(0xFFu << ((uint8_t)(lsb) & 7u)))))))
 
 static const char *TAG = "ubx_msg_handler";
 
@@ -531,7 +531,9 @@ void print_ubx_msg(ubx_msg_byte_ctx_t * ubx_packet) {
 }
 
 esp_err_t ack_status(ubx_config_t *ubx_dev, uint8_t cls_id, uint8_t msg_id) {
+#if C_LOG_LEVEL < 1
     DLOG(TAG, "[%s]\n", __func__);
+#endif
     esp_err_t ret = ESP_OK;
     ubx_dev->ubx_msg.navAck.msg_cls = cls_id;
     ubx_dev->ubx_msg.navAck.msg_id = msg_id;
@@ -566,13 +568,19 @@ esp_err_t write_ubx_msg(int uart_num, uint8_t *msg, size_t size, bool need_check
     esp_err_t ret = ESP_OK;
     if(need_checksum)
         add_checksum(msg, size, msg + size - 2, msg + size - 1);
+#if C_LOG_LEVEL < 1
     DLOG(TAG, "[%s]: [ ", __func__);
+#endif
     for(uint16_t i=0; i < size; ++i){ // write the message byte by byte
+#if C_LOG_LEVEL < 1
         DLOG(TAG, "0x%01x ", *(msg+i));
+#endif
         if(uart_write_bytes(uart_num, msg+i, 1) != 1)
             ret = ESP_FAIL;
     }
+#if C_LOG_LEVEL < 1
     DLOG(TAG, "] (%u)\n", size);
+#endif
     return ret;
 }
 
