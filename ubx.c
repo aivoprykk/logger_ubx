@@ -183,7 +183,7 @@ static esp_err_t ubx_uart_init(ubx_config_t *ubx_dev) {
             goto done;
         }
         done:
-        ESP_ERROR_CHECK(esp_event_post(UBX_EVENT, !ret ? UBX_EVENT_UART_INIT_DONE : UBX_EVENT_UART_INIT_FAIL, NULL,0, portMAX_DELAY));
+        esp_event_post(UBX_EVENT, !ret ? UBX_EVENT_UART_INIT_DONE : UBX_EVENT_UART_INIT_FAIL, NULL,0, portMAX_DELAY);
         if(!ret) {
 #if (C_LOG_LEVEL < 3)
             ILOG(TAG, "[%s] done", __FUNCTION__);
@@ -214,7 +214,7 @@ static esp_err_t ubx_uart_deinit(ubx_config_t *ubx_dev) {
             ESP_LOGE(TAG, "[%s] ubx_pins_deinit failed", __FUNCTION__);
         }
         if (!ret) {
-            ESP_ERROR_CHECK(esp_event_post(UBX_EVENT, UBX_EVENT_UART_DEINIT_DONE, NULL,0, portMAX_DELAY));
+            esp_event_post(UBX_EVENT, UBX_EVENT_UART_DEINIT_DONE, NULL,0, portMAX_DELAY);
             ubx_dev->uart_setup_ok = false;
         }
         xSemaphoreGive(ubx_dev->xMutex);
@@ -299,10 +299,11 @@ esp_err_t ubx_setup(ubx_config_t *ubx_dev) {
     esp_err_t ret = ESP_OK;
     if (ubx_dev == NULL){
         ret  = ESP_ERR_INVALID_ARG;
-        goto done;
+        goto silent;
     }
     if(ubx_dev->uart_setup_ok || ubx_dev->config_progress){
-        goto done;
+        ILOG(TAG, "[%s] already setup", __func__);
+        goto silent;
     }
     ubx_dev->config_progress = 1;
     ret = ubx_on(ubx_dev);
@@ -414,8 +415,8 @@ esp_err_t ubx_setup(ubx_config_t *ubx_dev) {
     }
     fail:
     ubx_dev->config_progress = 0;
-    done:
-    ESP_ERROR_CHECK(esp_event_post(UBX_EVENT, !ret ? UBX_EVENT_SETUP_DONE : UBX_EVENT_SETUP_FAIL, NULL,0, portMAX_DELAY));
+    esp_event_post(UBX_EVENT, !ret ? UBX_EVENT_SETUP_DONE : UBX_EVENT_SETUP_FAIL, NULL,0, portMAX_DELAY);
+    silent:
     if(!ret){
         ubx_dev->ready = true;
         ubx_dev->ready_time = get_millis();
@@ -488,7 +489,7 @@ static esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, int baud) {
     ILOG(TAG, "[%s]", __func__);
     if(baud == ubx->rtc_conf->baud){
 #if (C_LOG_LEVEL < 2)
-        ILOG(TAG, "[%s] baud rate already set to %"PRIu32", no changes made.", __FUNCTION__, baud);
+        ILOG(TAG, "[%s] baud rate already set to %d, no changes made.", __FUNCTION__, baud);
 #endif
         return ESP_OK;
     }
@@ -540,7 +541,7 @@ static esp_err_t ubx_set_uart_out_rate(ubx_config_t *ubx) {
         baud = UBX_BAUD_38400;
     }
 #if (C_LOG_LEVEL < 2)
-    ILOG(TAG, "[%s] solutions:%hhu output rate: %"PRIu8", baud: %"PRIu32, __FUNCTION__, ubx->rtc_conf->gnss_count, ubx->rtc_conf->output_rate, baud);
+    ILOG(TAG, "[%s] solutions:%hhu output rate: %"PRIu8", baud: %d", __FUNCTION__, ubx->rtc_conf->gnss_count, ubx->rtc_conf->output_rate, baud);
 #endif
     ret = ubx_cfg_valset(ubx, (const uint8_t[]){
         0x01, 0x00, 0x21, 0x30, output_vec[0], output_vec[1]
@@ -869,7 +870,7 @@ static esp_err_t ubx_try_baud(ubx_config_t *ubx, ubx_msg_byte_ctx_t * ubx_packet
             delay_ms(50);
         }
 #if (C_LOG_LEVEL < 2)
-        DLOG(TAG, "[%s] try read initial data with %"PRIu32"\n", __FUNCTION__, ubx->rtc_conf->baud);
+        DLOG(TAG, "[%s] try read initial data with %d\n", __FUNCTION__, ubx->rtc_conf->baud);
 #endif
         memset(ubx_packet->msg, 0, ubx_packet->msg_size);
         //ubx_packet->ubx_msg = &ubx->ubx_msg;
@@ -880,14 +881,14 @@ static esp_err_t ubx_try_baud(ubx_config_t *ubx, ubx_msg_byte_ctx_t * ubx_packet
             p = (char *)q;
             if(*q == UBX_HDR_A && *(q+1) == UBX_HDR_B) {
 #if (C_LOG_LEVEL < 2)
-                ILOG(TAG, "[%s] found UBX message at %d with baud: %"PRIu32, __FUNCTION__, p-(char*)ubx_packet->msg, ubx->rtc_conf->baud);
+                ILOG(TAG, "[%s] found UBX message at %d with baud: %d", __FUNCTION__, p-(char*)ubx_packet->msg, ubx->rtc_conf->baud);
 #endif
                 return ESP_OK;
                 break;
             }
             else if(*p == '$' && *(p+1) == 'G') {
 #if (C_LOG_LEVEL < 2)
-                ILOG(TAG, "[%s] found NMEA message at %d with baud: %"PRIu32, __FUNCTION__, p-(char*)ubx_packet->msg, ubx->rtc_conf->baud);
+                ILOG(TAG, "[%s] found NMEA message at %d with baud: %d", __FUNCTION__, p-(char*)ubx_packet->msg, ubx->rtc_conf->baud);
 #endif
                 return ESP_OK;
                 break;
