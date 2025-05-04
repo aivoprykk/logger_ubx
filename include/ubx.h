@@ -127,6 +127,7 @@ typedef struct ubx_config_s {
     bool config_ok;
     bool config_progress;
     bool ready;
+    bool shutdown_requested;
     uint32_t ready_time;
     bool is_on;
     SemaphoreHandle_t xMutex;

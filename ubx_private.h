@@ -14,7 +14,7 @@ extern "C" {
 // #include "ubx.h"
 
 /*!< Timeout for the ubx message */
-#define MSG_READ_TIMEOUT 2000
+#define MSG_READ_TIMEOUT 3000
 
 /*!< UBX Protocol headers */
 enum ubx_hdr_e {
@@ -82,8 +82,7 @@ enum ubx_mon_e {
 
 /*!< SEC Message IDs */
 enum ubx_sec_e {
-    SEC_UBX = 0x01,
-    SEC_KEY = 0x02
+    SEC_UNIQID = 0x03
 };
 
 #include "sdkconfig.h"
