@@ -113,7 +113,7 @@ typedef struct ubx_user_ctx_s {
 // prvate functions
 
 static esp_err_t ubx_set_gnss(struct ubx_config_s *ubx, uint8_t mode);
-static esp_err_t ubx_set_uart_out_rate(struct ubx_config_s *ubx);
+static esp_err_t ubx_set_uart_out_rate(struct ubx_config_s *ubx, uint8_t rate);
 
 static esp_err_t ubx_set_prot_msg_out(struct ubx_config_s *ubx, bool enable_nmea, bool enable_ubx);
 static esp_err_t ubx_set_msgout(struct ubx_config_s *ubx);
