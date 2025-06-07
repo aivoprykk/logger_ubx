@@ -10,7 +10,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef struct nav_pvt_s {  // 92 bytes payload, with Beitian BN220 100 bytes total ????(0xB5,0x62,....,chkA,chkB
+typedef struct __attribute__((packed)) nav_pvt_s {  // 92 bytes payload, with Beitian BN220 100 bytes total ????(0xB5,0x62,....,chkA,chkB
     uint8_t cls;
     uint8_t id;
     uint16_t len;       // 92 bytes payload
