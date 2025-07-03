@@ -144,8 +144,12 @@ static esp_err_t ubx_uart_init(ubx_config_t *ubx_dev) {
     if(ubx_dev->uart_setup_ok)
         return ESP_OK;
     if (ubx_dev->config_ok != true) {
-        ESP_LOGE(TAG, "you must call ubx_config_init(cfg) first!!!!");
-        assert(0);
+#if (C_LOG_LEVEL < 3)
+        assert(0 && "ubx_config_init(cfg) must be called first");
+#else
+        ELOG(TAG, "[%s] ubx_config_init(cfg) must be called first", __FUNCTION__);
+        return ESP_ERR_INVALID_STATE;
+#endif
     }
     esp_err_t ret = ESP_OK;
 
@@ -346,6 +350,7 @@ esp_err_t ubx_set_ggnss_and_rate(ubx_config_t *ubx_dev, uint8_t gnss, uint8_t ra
         ESP_LOGE(TAG, "[%s] ubx_set_uart_out_rate failed", __func__);
         goto fail;
     }
+    esp_event_post(UBX_EVENT, UBX_EVENT_SAMPLE_RATE_CHANGED, 0, 0, portMAX_DELAY);
     fail:
     return ret;
 }

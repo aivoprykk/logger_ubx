@@ -21,7 +21,8 @@ ESP_EVENT_DECLARE_BASE(UBX_EVENT);        // declaration of the UBX_EVENT family
     l(UBX_EVENT_UART_INIT_FAIL) \
     l(UBX_EVENT_SETUP_DONE) \
     l(UBX_EVENT_SETUP_FAIL) \
-    l(UBX_EVENT_MSG_RECIEVED)
+    l(UBX_EVENT_MSG_RECIEVED) \
+    l(UBX_EVENT_SAMPLE_RATE_CHANGED) \
 
 // declaration of the specific events under the UBX_EVENT family
 enum {                                       
