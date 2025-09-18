@@ -936,7 +936,7 @@ static esp_err_t ubx_try_baud(ubx_config_t *ubx, ubx_msg_byte_ctx_t * ubx_packet
             delay_ms(50);
         }
 #if (C_LOG_LEVEL < 2)
-        DLOG(TAG, "[%s] try read initial data with %d\n", __FUNCTION__, ubx->rtc_conf->baud);
+        DLOG(TAG, "[%s] try read initial data with %d", __FUNCTION__, ubx->rtc_conf->baud);
 #endif
         memset(ubx_packet->msg, 0, ubx_packet->msg_size);
         //ubx_packet->ubx_msg = &ubx->ubx_msg;

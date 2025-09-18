@@ -532,7 +532,7 @@ void print_ubx_msg(ubx_msg_byte_ctx_t * ubx_packet) {
 
 esp_err_t ack_status(ubx_config_t *ubx_dev, uint8_t cls_id, uint8_t msg_id) {
 #if C_LOG_LEVEL < 1
-    DLOG(TAG, "[%s]\n", __func__);
+    DLOG(TAG, "[%s]", __func__);
 #endif
     esp_err_t ret = ESP_OK;
     ubx_dev->ubx_msg.navAck.msg_cls = cls_id;
@@ -579,7 +579,7 @@ esp_err_t write_ubx_msg(int uart_num, uint8_t *msg, size_t size, bool need_check
             ret = ESP_FAIL;
     }
 #if C_LOG_LEVEL < 1
-    DLOG(TAG, "] (%u)\n", size);
+    DLOG(TAG, "] (%u)", size);
 #endif
     return ret;
 }
