@@ -122,14 +122,14 @@ typedef struct ubx_config_s {
     ubx_rtc_config_t * rtc_conf;
     ubx_msg_t ubx_msg;
     char Ublox_type[20];
+    /// state flags
     bool uart_setup_ok;
-    bool config_ok;
-    bool config_progress;
+    bool setup_progress;
+    bool initialized;
     bool ready;
-    bool shutdown_requested;
     uint32_t ready_time;
     bool is_on;
-    SemaphoreHandle_t xMutex;
+    bool shutdown_requested;
 } ubx_config_t;
 
 /**
@@ -153,12 +153,12 @@ typedef struct ubx_config_s {
     .ubx_msg = UBX_MSG_DEFAULT,                     \
     .Ublox_type = "Ublox unknown...", \
     .uart_setup_ok = false,                           \
-    .config_ok = false,                               \
-    .config_progress = false,                         \
+    .setup_progress = false,                         \
+    .initialized = false,                               \
     .ready = false,                                \
-    .is_on = false,                                  \
     .ready_time = 0,                                \
-    .xMutex = NULL                                   \
+    .is_on = false,                                  \
+    .shutdown_requested = false,                     \
 }
 
 /**

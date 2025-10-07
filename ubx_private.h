@@ -250,4 +250,7 @@ inline void decode_uint16(const uint8_t* hex_string, uint16_t *output) {
     *output = (*(hex_string) + (*(hex_string+1) << 8));
 }
 
+bool lock(int timeout);
+void unlock();
+
 #endif /* F77B6D3D_E33D_4ED3_B35C_5404E7A31138 */

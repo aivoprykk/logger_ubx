@@ -147,7 +147,7 @@ esp_err_t ubx_msg_serialize_json(ubx_msg_byte_ctx_t * ubx_packet, strbf_t * msgb
         case MT_NAV_ID:
             return nav_id_serialize_json((nav_id_t *)ubx_packet->msg, msgbf);
         default:
-            ESP_LOGW(TAG, "[%s] unknown ubx message type: %u", __FUNCTION__, ubx_packet->ubx_msg_type);
+            WLOG(TAG, "[%s] unknown ubx message type: %u", __FUNCTION__, ubx_packet->ubx_msg_type);
             return ESP_ERR_NOT_SUPPORTED;
     };
     return ESP_OK;
@@ -158,7 +158,7 @@ esp_err_t ubx_msg_serialize_json(ubx_msg_byte_ctx_t * ubx_packet, strbf_t * msgb
 esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
     assert(ubx_packet);
     if(!ubx_packet->msg) {
-        ESP_LOGW(TAG, "msg is NULL, can not handle message.");
+        WLOG(TAG, "msg is NULL, can not handle message.");
         return ESP_ERR_INVALID_ARG;
     }
     assert(ubx_packet->ubx_msg);
@@ -198,7 +198,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     break;
                 default:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    ESP_LOGW(TAG, "[%s] unknown NAV message type: %02x",__FUNCTION__ , *(ubx_packet->msg + 1));
+                    WLOG(TAG, "[%s] unknown NAV message type: %02x",__FUNCTION__ , *(ubx_packet->msg + 1));
 #endif
                     goto err;
                     //break;
@@ -228,7 +228,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     break;
                 default:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    ESP_LOGW(TAG, "[%s] unknown MON message type: %02x",__FUNCTION__ , *(ubx_packet->msg + 1));
+                    WLOG(TAG, "[%s] unknown MON message type: %02x",__FUNCTION__ , *(ubx_packet->msg + 1));
 #endif
                     goto err;
                     //break;
@@ -258,7 +258,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     break;
                 default:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    ESP_LOGW(TAG, "[%s] unknown ACK message type: %02x", __FUNCTION__, *(ubx_packet->msg + 1));
+                    WLOG(TAG, "[%s] unknown ACK message type: %02x", __FUNCTION__, *(ubx_packet->msg + 1));
 #endif
                     goto err;
                     //break;
@@ -278,7 +278,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     break;
                 default:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    ESP_LOGW(TAG, "[%s] unknown SEC message type: %02x", __FUNCTION__, *(ubx_packet->msg + 1));
+                    WLOG(TAG, "[%s] unknown SEC message type: %02x", __FUNCTION__, *(ubx_packet->msg + 1));
 #endif
                     goto err;
                     //break;
@@ -286,7 +286,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
             break;
         default:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-            ESP_LOGW(TAG, "[%s] unknown message class: %02x", __FUNCTION__, *ubx_packet->msg);
+            WLOG(TAG, "[%s] unknown message class: %02x", __FUNCTION__, *ubx_packet->msg);
 #endif
             goto err;
             //break;
@@ -324,7 +324,7 @@ esp_err_t msg_checksum_cb(ubx_msg_byte_ctx_t * ubx_packet) {
     }
     else {
 #if LOG_MSG_BITS == 1 && (C_LOG_LEVEL < 2)
-        ESP_LOGE(TAG, "[%s] checksum failed cka:%02x ckb:%02x mcka:%02x mckb:%02x size:%"PRId16, __FUNCTION__, CK_A, CK_B, *(msg+size-2), *(msg+size-1), size);
+        ELOG(TAG, "[%s] checksum failed cka:%02x ckb:%02x mcka:%02x mckb:%02x size:%"PRId16, __FUNCTION__, CK_A, CK_B, *(msg+size-2), *(msg+size-1), size);
 #endif
         return ESP_ERR_INVALID_CRC;
     }
@@ -334,7 +334,7 @@ esp_err_t ubx_msg_checksum_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
     esp_err_t ret = ESP_OK;
     if(!ubx_packet->msg) {
 #if LOG_MSG_BITS == 1 && (C_LOG_LEVEL < 3)
-        ESP_LOGW(TAG, "msg is NULL, can not handle message.");
+        WLOG(TAG, "msg is NULL, can not handle message.");
 #endif
         return ESP_ERR_INVALID_ARG;
     }
@@ -345,7 +345,7 @@ esp_err_t ubx_msg_checksum_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
         if(ubx_packet->ubx_msg_type == MT_NAV_PVT||ubx_packet->ubx_msg_type == MT_NAV_SAT||ubx_packet->ubx_msg_type== MT_NAV_DOP) {
             *(ubx_packet->msg+4) = *(ubx_packet->msg+5) = *(ubx_packet->msg+6) = *(ubx_packet->msg+7) = 0; // reset iTOW
 #if (C_LOG_LEVEL < 3)
-            ESP_LOGE(TAG,"[%s] fail, reset msg %hhu iTOW\n", __func__, ubx_packet->ubx_msg_type);
+            ELOG(TAG,"[%s] fail, reset msg %hhu iTOW\n", __func__, ubx_packet->ubx_msg_type);
 #endif
         }
         ubx_packet->ubx_msg_type = MT_NONE;
@@ -360,7 +360,7 @@ esp_err_t ubx_msg_handler(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t *ubx_packet)
     ubx_msg_byte_ctx_reset(ubx_packet); // reset msg pointer and length to default
     esp_err_t err = read_ubx_msg(ubx_dev, ubx_packet);
     // if(err != ESP_OK) {
-    //     ESP_LOGE(TAG, "[%s] read failed: %s", __FUNCTION__, esp_err_to_name(err));
+    //     ELOG(TAG, "[%s] read failed: %s", __FUNCTION__, esp_err_to_name(err));
     // }
     return err;
 }
@@ -390,7 +390,7 @@ esp_err_t read_ubx_msg(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
         while (j<len) {
             if (!uart_read_bytes(ubx_dev->uart_num, &data, 1, 20 / portTICK_PERIOD_MS)) {
 #if (C_LOG_LEVEL < 2)
-                ESP_LOGW(TAG, "[%s] timeout, uart buffer full?", __FUNCTION__);
+                WLOG(TAG, "[%s] timeout, uart buffer full?", __FUNCTION__);
 #endif
                 return ESP_ERR_TIMEOUT;
             }
@@ -417,13 +417,13 @@ esp_err_t read_ubx_msg(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
             else if(i==ubx_packet->msg_pos && ubx_packet->msg_type_handler) {
 #if (C_LOG_LEVEL < 1)
                 if(ubx_packet->ubx_msg_type != MT_NONE) {
-                    ESP_LOGW(TAG, "[%s] msg type already set to: 0x%02x, it seems that previous msg not finished...", __FUNCTION__, ubx_packet->ubx_msg_type);
+                    WLOG(TAG, "[%s] msg type already set to: 0x%02x, it seems that previous msg not finished...", __FUNCTION__, ubx_packet->ubx_msg_type);
                 }
 #endif
                 ret = ubx_packet->msg_type_handler(ubx_packet);
                 if(ret != ESP_OK) { // set msg pointer and length point to right struct
 #if (C_LOG_LEVEL < 1)
-                    ESP_LOGW(TAG, "[%s] msg type handler failed", __FUNCTION__);
+                    WLOG(TAG, "[%s] msg type handler failed", __FUNCTION__);
 #endif
                     goto done;
                 }
@@ -449,7 +449,7 @@ esp_err_t read_ubx_msg(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
                 msg_len += 6; // add 6 bytes for UBX header and checksum
                 if(msg_len > ubx_packet->msg_size) {
 #if (C_LOG_LEVEL < 1)
-                    ESP_LOGE(TAG, "[%s] msg size too big: msg_len:%u msg_size:%u", __FUNCTION__, msg_len, ubx_packet->msg_size);
+                    ELOG(TAG, "[%s] msg size too big: msg_len:%u msg_size:%u", __FUNCTION__, msg_len, ubx_packet->msg_size);
 #endif
                 }
                 else if(msg_len != ubx_packet->msg_size) {
@@ -478,13 +478,13 @@ esp_err_t read_ubx_msg(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
     if(ret == ESP_OK) {
         if ((elapsed) >= timeout) {// timeout
 #if (C_LOG_LEVEL < 2)
-            ESP_LOGW(TAG, "[%s] timeout, elapsed: %"PRIu32, __FUNCTION__, elapsed);
+            WLOG(TAG, "[%s] timeout, elapsed: %"PRIu32, __FUNCTION__, elapsed);
 #endif
             ret = ESP_ERR_TIMEOUT;
         }
         else if(!*(ubx_packet->msg+2)) {// no data
 #if (C_LOG_LEVEL < 1)
-            ESP_LOGW(TAG, "[%s] no data", __FUNCTION__);
+            WLOG(TAG, "[%s] no data", __FUNCTION__);
 #endif
             ret = ESP_ERR_INVALID_RESPONSE;
         }
@@ -564,7 +564,7 @@ void add_checksum(uint8_t *message, uint16_t size, uint8_t *CK_A, uint8_t *CK_B)
 }
 
 esp_err_t write_ubx_msg(int uart_num, uint8_t *msg, size_t size, bool need_checksum) {
-    ILOG(TAG, "[%s]", __func__);
+    FUNC_ENTRY(TAG);
     esp_err_t ret = ESP_OK;
     if(need_checksum)
         add_checksum(msg, size, msg + size - 2, msg + size - 1);
@@ -585,20 +585,20 @@ esp_err_t write_ubx_msg(int uart_num, uint8_t *msg, size_t size, bool need_check
 }
 
 static esp_err_t ubx_cfg_send_m(ubx_config_t *ubx_dev, uint8_t * msg, size_t msg_len, bool need_ack) {
-    ILOG(TAG, "[%s]", __func__);
+    FUNC_ENTRY(TAG);
     IMEAS_START();
     esp_err_t ret = ESP_OK;
-    if (xSemaphoreTake(ubx_dev->xMutex, portMAX_DELAY) == pdTRUE) {
+    if (lock(1000)) {
         ret = write_ubx_msg(ubx_dev->uart_num, msg, msg_len, true);
         if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "[%s] write_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
+            ELOG(TAG, "[%s] write_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
             goto done;
         }
         delay_ms(100);
         if(need_ack) 
             ret = ack_status(ubx_dev, *(msg+2), *(msg+3));
     done:
-        xSemaphoreGive(ubx_dev->xMutex);
+       unlock();
     }
     IMEAS_END(TAG, "[%s] took %llu", __func__);
     return ret;
@@ -619,7 +619,7 @@ esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx_dev, uint8_t cls, uint8_t id, const
     assert(msg);
     esp_err_t ret = ubx_cfg_send_m(ubx_dev, msg, total_len, need_ack);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "[%s] failed: %s", __FUNCTION__, esp_err_to_name(ret));
+        ELOG(TAG, "[%s] failed: %s", __FUNCTION__, esp_err_to_name(ret));
     }
     if(len)
         free(msg);
@@ -627,8 +627,8 @@ esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx_dev, uint8_t cls, uint8_t id, const
 }
 
 esp_err_t ubx_cfg_valset(ubx_config_t *ubx_dev, const uint8_t * payload, size_t len, bool need_ack) {
-    ILOG(TAG, "[%s]", __func__);
-    if(ubx_dev->rtc_conf->hw_type < UBX_TYPE_M9)
+    FUNC_ENTRY(TAG);
+    if(rtc_config.hw_type < UBX_TYPE_M9)
         return ESP_ERR_INVALID_ARG;
     uint8_t *msg = calloc(len+4, sizeof(uint8_t));
     memcpy(msg, (const uint8_t[]){0x01, 0x01, 0x00, 0x00}, 4);
@@ -642,12 +642,12 @@ esp_err_t ubx_cfg_get(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
     IMEAS_START();
     assert(ubx_packet && ubx_dev);
     esp_err_t ret = send_ubx_cfg_msg(ubx_dev, *ubx_packet->msg, *(ubx_packet->msg+1), NULL, 0, false);
-    if(xSemaphoreTake(ubx_dev->xMutex, portMAX_DELAY)) {
+    if(lock(1000)) {
         ret = read_ubx_msg(ubx_dev, ubx_packet); // this msg is without ubx header as ubx_msg_t parts start with class and id
         if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "[%s] read_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
+            ELOG(TAG, "[%s] read_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
         }
-        xSemaphoreGive(ubx_dev->xMutex);
+        unlock();
     }
     IMEAS_END(TAG, "[%s] took %llu", __func__);
     return ret;
