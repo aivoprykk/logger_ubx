@@ -258,7 +258,7 @@ esp_err_t ubx_on(ubx_config_t *ubx_dev) {
     IMEAS_START();
     esp_err_t ret = ESP_OK;
     ret = ubx_uart_init(ubx_dev);
-    IMEAS_END(TAG, "[%s] took %llu", __func__);
+    IMEAS_END(TAG);
     ubx_dev->is_on = true;
     return ret;
 }
@@ -277,7 +277,7 @@ esp_err_t ubx_off(ubx_config_t *ubx_dev) {
     ubx_dev->is_on = false;
     ubx_dev->ready_time = 0;
     ubx_dev->shutdown_requested = false;
-    IMEAS_END(TAG, "[%s] took %llu", __func__);
+    IMEAS_END(TAG);
     return ret;
 }
 
@@ -408,10 +408,8 @@ int print_ubx_dev_state(ubx_config_t *ubx_dev) {
 #endif
 
 esp_err_t ubx_setup(ubx_config_t *ubx_dev) {
-#if (C_LOG_LEVEL < 3)
     FUNC_ENTRY(TAG);
     IMEAS_START();
-#endif
     esp_err_t ret = ESP_OK;
     if (ubx_dev == NULL){
         ret  = ESP_ERR_INVALID_ARG;
@@ -528,9 +526,7 @@ esp_err_t ubx_setup(ubx_config_t *ubx_dev) {
         ubx_dev->ready = true;
         ubx_dev->ready_time = get_millis();
     }
-#if (C_LOG_LEVEL < 3)
-    IMEAS_END(TAG, "[%s] took %llu", __func__);
-#endif
+    IMEAS_END(TAG);
 #if (C_LOG_LEVEL < 3)
     print_ubx_dev_state(ubx_dev);
 #endif

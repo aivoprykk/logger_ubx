@@ -600,7 +600,7 @@ static esp_err_t ubx_cfg_send_m(ubx_config_t *ubx_dev, uint8_t * msg, size_t msg
     done:
        unlock();
     }
-    IMEAS_END(TAG, "[%s] took %llu", __func__);
+    IMEAS_END(TAG);
     return ret;
 }
 
@@ -649,7 +649,7 @@ esp_err_t ubx_cfg_get(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
         }
         unlock();
     }
-    IMEAS_END(TAG, "[%s] took %llu", __func__);
+    IMEAS_END(TAG);
     return ret;
 }
 
