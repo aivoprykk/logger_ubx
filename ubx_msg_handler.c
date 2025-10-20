@@ -167,8 +167,8 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
         case CLS_NAV:
             switch (*(ubx_packet->msg + 1)) {
                 case NAV_PVT:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    printf(">> NAV_PVT >>\n");
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
+                    TLOG(TAG, ">> NAV_PVT >>");
 #endif
                     ubx_packet->ubx_msg_type = MT_NAV_PVT;
                     ubx_packet->msg = (uint8_t *)&msg->navPvt;
@@ -177,8 +177,8 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 case NAV_DOP:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    printf(">> NAV_DOP >>\n");
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
+                    TLOG(TAG, ">> NAV_DOP >>");
 #endif
                     ubx_packet->ubx_msg_type = MT_NAV_DOP;
                     ubx_packet->msg = (uint8_t *)&msg->navDOP;
@@ -187,8 +187,8 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 case NAV_SAT:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    printf(">> NAV_SAT >>\n");
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
+                    TLOG(TAG, ">> NAV_SAT >>\n");
 #endif
                     ubx_packet->ubx_msg_type = MT_NAV_SAT;
                     ubx_packet->msg = (uint8_t *)&msg->nav_sat;
@@ -197,7 +197,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 default:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
                     WLOG(TAG, "[%s] unknown NAV message type: %02x",__FUNCTION__ , *(ubx_packet->msg + 1));
 #endif
                     goto err;
@@ -207,8 +207,8 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
         case CLS_MON:
             switch (*(ubx_packet->msg + 1)) {
                 case MON_GNSS:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    printf(">> MON_GNSS >>\n");
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
+                    TLOG(TAG, ">> MON_GNSS >>\n");
 #endif
                     ubx_packet->ubx_msg_type = MT_MON_GNSS;
                     ubx_packet->msg = (uint8_t *)&msg->monGNSS;
@@ -217,8 +217,8 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 case MON_VER:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    printf(">> MON_VER >>\n");
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
+                    TLOG(TAG, ">> MON_VER >>\n");
 #endif
                     ubx_packet->ubx_msg_type = MT_MON_VER;
                     ubx_packet->msg = (uint8_t *)&msg->mon_ver;
@@ -227,7 +227,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 default:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
                     WLOG(TAG, "[%s] unknown MON message type: %02x",__FUNCTION__ , *(ubx_packet->msg + 1));
 #endif
                     goto err;
@@ -237,8 +237,8 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
         case CLS_ACK:
             switch (*(ubx_packet->msg + 1)) {
                 case ACK_ACK:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    printf(">> ACK_ACK >>\n");
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
+                    TLOG(TAG, ">> ACK_ACK >>\n");
 #endif
                     ubx_packet->ubx_msg_type = MT_NAV_ACK;
                     ubx_packet->msg = (uint8_t *)&msg->navAck;
@@ -247,8 +247,8 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 case ACK_NAK:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    printf(">> ACK_NAK >>\n");
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
+                    TLOG(TAG, ">> ACK_NAK >>\n");
 #endif
                     ubx_packet->ubx_msg_type = MT_NAV_NACK;
                     ubx_packet->msg = (uint8_t *)&msg->navNack;
@@ -257,7 +257,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 default:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
                     WLOG(TAG, "[%s] unknown ACK message type: %02x", __FUNCTION__, *(ubx_packet->msg + 1));
 #endif
                     goto err;
@@ -267,7 +267,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
         case CLS_SEC:
             switch (*(ubx_packet->msg + 1)) { // SEC_UBX  0x27
                 case SEC_UNIQID:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
                     printf(">> SEC_UNIQID >>\n");
 #endif
                     ubx_packet->ubx_msg_type = MT_NAV_ID;
@@ -277,7 +277,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 default:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
                     WLOG(TAG, "[%s] unknown SEC message type: %02x", __FUNCTION__, *(ubx_packet->msg + 1));
 #endif
                     goto err;
@@ -285,7 +285,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
             }
             break;
         default:
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
             WLOG(TAG, "[%s] unknown message class: %02x", __FUNCTION__, *ubx_packet->msg);
 #endif
             goto err;
@@ -323,7 +323,7 @@ esp_err_t msg_checksum_cb(ubx_msg_byte_ctx_t * ubx_packet) {
         return ESP_OK;
     }
     else {
-#if LOG_MSG_BITS == 1 && (C_LOG_LEVEL < 2)
+#if LOG_MSG_BITS == 1 && (C_LOG_LEVEL <= LOG_DEBUG_NUM)
         ELOG(TAG, "[%s] checksum failed cka:%02x ckb:%02x mcka:%02x mckb:%02x size:%"PRId16, __FUNCTION__, CK_A, CK_B, *(msg+size-2), *(msg+size-1), size);
 #endif
         return ESP_ERR_INVALID_CRC;
@@ -333,7 +333,7 @@ esp_err_t msg_checksum_cb(ubx_msg_byte_ctx_t * ubx_packet) {
 esp_err_t ubx_msg_checksum_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
     esp_err_t ret = ESP_OK;
     if(!ubx_packet->msg) {
-#if LOG_MSG_BITS == 1 && (C_LOG_LEVEL < 3)
+#if LOG_MSG_BITS == 1 && (C_LOG_LEVEL <= LOG_INFO_NUM)
         WLOG(TAG, "msg is NULL, can not handle message.");
 #endif
         return ESP_ERR_INVALID_ARG;
@@ -344,7 +344,7 @@ esp_err_t ubx_msg_checksum_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
         ubx_packet->ubx_msg->count_err++;
         if(ubx_packet->ubx_msg_type == MT_NAV_PVT||ubx_packet->ubx_msg_type == MT_NAV_SAT||ubx_packet->ubx_msg_type== MT_NAV_DOP) {
             *(ubx_packet->msg+4) = *(ubx_packet->msg+5) = *(ubx_packet->msg+6) = *(ubx_packet->msg+7) = 0; // reset iTOW
-#if (C_LOG_LEVEL < 3)
+#if (C_LOG_LEVEL <= LOG_INFO_NUM)
             ELOG(TAG,"[%s] fail, reset msg %hhu iTOW\n", __func__, ubx_packet->ubx_msg_type);
 #endif
         }
@@ -389,7 +389,7 @@ esp_err_t read_ubx_msg(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
 // #endif
         while (j<len) {
             if (!uart_read_bytes(ubx_dev->uart_num, &data, 1, 20 / portTICK_PERIOD_MS)) {
-#if (C_LOG_LEVEL < 2)
+#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
                 WLOG(TAG, "[%s] timeout, uart buffer full?", __FUNCTION__);
 #endif
                 return ESP_ERR_TIMEOUT;
@@ -409,46 +409,46 @@ esp_err_t read_ubx_msg(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
                 goto next_byte;
             }
             else if(ubx_packet->msg_match_to_pos && i<ubx_packet->msg_pos && data != *(ubx_packet->msg+i)) {
-                //ESP_LOGI(TAG, "[%s] msg match to pos failed i:%u msg_pos:%"PRIu16" data:%02x j:%"PRIu16, __FUNCTION__, i, ubx_packet->msg_pos, data, j);
+                //DLOG(TAG, "[%s] msg match to pos failed i:%u msg_pos:%"PRIu16" data:%02x j:%"PRIu16, __FUNCTION__, i, ubx_packet->msg_pos, data, j);
                 i = 0; // reset if not matching
                 got_header = 0;
                 goto next_byte;
             }
             else if(i==ubx_packet->msg_pos && ubx_packet->msg_type_handler) {
-#if (C_LOG_LEVEL < 1)
+#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
                 if(ubx_packet->ubx_msg_type != MT_NONE) {
                     WLOG(TAG, "[%s] msg type already set to: 0x%02x, it seems that previous msg not finished...", __FUNCTION__, ubx_packet->ubx_msg_type);
                 }
 #endif
                 ret = ubx_packet->msg_type_handler(ubx_packet);
                 if(ret != ESP_OK) { // set msg pointer and length point to right struct
-#if (C_LOG_LEVEL < 1)
+#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
                     WLOG(TAG, "[%s] msg type handler failed", __FUNCTION__);
 #endif
                     goto done;
                 }
                 else if(msg_len != ubx_packet->msg_size) {
-#if  LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                    ESP_LOGI(TAG, "[%s] msg pointer changed from ubx, change also msg_len: %"PRIu16" to msg_size_%"PRIu16, __FUNCTION__, msg_len, ubx_packet->msg_size);
+#if  LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
+                    TLOG(TAG, "[%s] msg pointer changed from ubx, change also msg_len: %"PRIu16" to msg_size_%"PRIu16, __FUNCTION__, msg_len, ubx_packet->msg_size);
 #endif
                     msg_len = ubx_packet->msg_size;
                 }
             }
             if (data != *(ubx_packet->msg+i)) {
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
                 if(i<=ubx_packet->msg_pos)
-                    printf("[%s] msg match to pos i:%u j:%"PRIu16" msg_pos:%"PRIu16" data:0x%02x msg before:0x%02x\n", __FUNCTION__, i, j, ubx_packet->msg_pos, data, *(ubx_packet->msg+i));
+                    TLOG("[%s] msg match to pos i:%u j:%"PRIu16" msg_pos:%"PRIu16" data:0x%02x msg before:0x%02x", __FUNCTION__, i, j, ubx_packet->msg_pos, data, *(ubx_packet->msg+i));
 #endif
                 *(ubx_packet->msg+i) = data; // fill msg buffer
             }
             if(!ubx_packet->msg_match_to_pos && got_header == 2 && i == 3) { // check if msg buffer is full
                 decode_uint16(ubx_packet->msg+2, &msg_len); // set msg length
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL < 1)
-                printf("[%s] got pl_len:%"PRIu16" from ubx, ubx_packet>msg_size:%"PRIu16", ubx_packet>msg_len:%"PRIu16" ubxlen:0x%02x 0x%02x\n", __FUNCTION__, msg_len, ubx_packet->msg_size, ubx_packet->msg_len, *(ubx_packet->msg+2), *(ubx_packet->msg+3));
+#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
+                TLOG("[%s] got pl_len:%"PRIu16" from ubx, ubx_packet>msg_size:%"PRIu16", ubx_packet>msg_len:%"PRIu16" ubxlen:0x%02x 0x%02x", __FUNCTION__, msg_len, ubx_packet->msg_size, ubx_packet->msg_len, *(ubx_packet->msg+2), *(ubx_packet->msg+3));
 #endif
                 msg_len += 6; // add 6 bytes for UBX header and checksum
                 if(msg_len > ubx_packet->msg_size) {
-#if (C_LOG_LEVEL < 1)
+#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
                     ELOG(TAG, "[%s] msg size too big: msg_len:%u msg_size:%u", __FUNCTION__, msg_len, ubx_packet->msg_size);
 #endif
                 }
@@ -468,22 +468,22 @@ esp_err_t read_ubx_msg(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
     if(ubx_packet->msg_ready_handler) {
         ret = ubx_packet->msg_ready_handler(ubx_packet);
     }
-#if (C_LOG_LEVEL < 1)
+#if (C_LOG_LEVEL == LOG_TRACE_NUM)
         print_ubx_msg(ubx_packet);
 #if LOG_MSG_BITS == 2
-    ESP_LOGI(TAG, "[%s] done read len:%u bytes, i:%"PRIu16" of msg size: %u used, {cls:%02x, id:%02x}", __FUNCTION__, len, i, ubx_packet->msg_size, *(ubx_packet->msg), *(ubx_packet->msg+1));
+    DLOG(TAG, "[%s] done read len:%u bytes, i:%"PRIu16" of msg size: %u used, {cls:%02x, id:%02x}", __FUNCTION__, len, i, ubx_packet->msg_size, *(ubx_packet->msg), *(ubx_packet->msg+1));
 #endif
 #endif
     //xSemaphoreGive(xMutex);
     if(ret == ESP_OK) {
         if ((elapsed) >= timeout) {// timeout
-#if (C_LOG_LEVEL < 2)
+#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
             WLOG(TAG, "[%s] timeout, elapsed: %"PRIu32, __FUNCTION__, elapsed);
 #endif
             ret = ESP_ERR_TIMEOUT;
         }
         else if(!*(ubx_packet->msg+2)) {// no data
-#if (C_LOG_LEVEL < 1)
+#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
             WLOG(TAG, "[%s] no data", __FUNCTION__);
 #endif
             ret = ESP_ERR_INVALID_RESPONSE;
@@ -531,9 +531,7 @@ void print_ubx_msg(ubx_msg_byte_ctx_t * ubx_packet) {
 }
 
 esp_err_t ack_status(ubx_config_t *ubx_dev, uint8_t cls_id, uint8_t msg_id) {
-#if C_LOG_LEVEL < 1
-    DLOG(TAG, "[%s]", __func__);
-#endif
+    TLOG(TAG, "[%s]", __func__);
     esp_err_t ret = ESP_OK;
     ubx_dev->ubx_msg.navAck.msg_cls = cls_id;
     ubx_dev->ubx_msg.navAck.msg_id = msg_id;
@@ -564,29 +562,29 @@ void add_checksum(uint8_t *message, uint16_t size, uint8_t *CK_A, uint8_t *CK_B)
 }
 
 esp_err_t write_ubx_msg(int uart_num, uint8_t *msg, size_t size, bool need_checksum) {
-    FUNC_ENTRY(TAG);
+    FUNC_ENTRYD(TAG);
     esp_err_t ret = ESP_OK;
     if(need_checksum)
         add_checksum(msg, size, msg + size - 2, msg + size - 1);
-#if C_LOG_LEVEL < 1
+#if C_LOG_LEVEL == LOG_TRACE_NUM
     DLOG(TAG, "[%s]: [ ", __func__);
 #endif
     for(uint16_t i=0; i < size; ++i){ // write the message byte by byte
-#if C_LOG_LEVEL < 1
+#if C_LOG_LEVEL == LOG_TRACE_NUM
         DLOG(TAG, "0x%01x ", *(msg+i));
 #endif
         if(uart_write_bytes(uart_num, msg+i, 1) != 1)
             ret = ESP_FAIL;
     }
-#if C_LOG_LEVEL < 1
+#if C_LOG_LEVEL == LOG_TRACE_NUM
     DLOG(TAG, "] (%u)", size);
 #endif
     return ret;
 }
 
 static esp_err_t ubx_cfg_send_m(ubx_config_t *ubx_dev, uint8_t * msg, size_t msg_len, bool need_ack) {
-    FUNC_ENTRY(TAG);
-    IMEAS_START();
+    FUNC_ENTRYD(TAG);
+    DMEAS_START();
     esp_err_t ret = ESP_OK;
     if (lock(1000)) {
         ret = write_ubx_msg(ubx_dev->uart_num, msg, msg_len, true);
@@ -600,7 +598,7 @@ static esp_err_t ubx_cfg_send_m(ubx_config_t *ubx_dev, uint8_t * msg, size_t msg
     done:
        unlock();
     }
-    IMEAS_END(TAG);
+    DMEAS_END(TAG);
     return ret;
 }
 
@@ -627,7 +625,7 @@ esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx_dev, uint8_t cls, uint8_t id, const
 }
 
 esp_err_t ubx_cfg_valset(ubx_config_t *ubx_dev, const uint8_t * payload, size_t len, bool need_ack) {
-    FUNC_ENTRY(TAG);
+    FUNC_ENTRYD(TAG);
     if(rtc_config.hw_type < UBX_TYPE_M9)
         return ESP_ERR_INVALID_ARG;
     uint8_t *msg = calloc(len+4, sizeof(uint8_t));
@@ -639,7 +637,7 @@ esp_err_t ubx_cfg_valset(ubx_config_t *ubx_dev, const uint8_t * payload, size_t 
 }
 
 esp_err_t ubx_cfg_get(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
-    IMEAS_START();
+    DMEAS_START();
     assert(ubx_packet && ubx_dev);
     esp_err_t ret = send_ubx_cfg_msg(ubx_dev, *ubx_packet->msg, *(ubx_packet->msg+1), NULL, 0, false);
     if(lock(1000)) {
@@ -649,7 +647,7 @@ esp_err_t ubx_cfg_get(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
         }
         unlock();
     }
-    IMEAS_END(TAG);
+    DMEAS_END(TAG);
     return ret;
 }
 

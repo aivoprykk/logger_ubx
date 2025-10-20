@@ -53,7 +53,9 @@ menu "Logger Ublox GPS Module Configuration"
         help
             Specify how important log should be added.
         config UBLOX_LOG_LEVEL_TRACE
-            bool "TRACE: A lot of logs to give detailed information"
+            bool "TRACE: Log more to give detailed information"
+        config UBLOX_LOG_LEVEL_DEBUG
+            bool "DEBUG: Log general debug info"
         config UBLOX_LOG_LEVEL_INFO
             bool "INFO: Log important events"
         config UBLOX_LOG_LEVEL_WARN
@@ -68,10 +70,11 @@ menu "Logger Ublox GPS Module Configuration"
     config UBLOX_LOG_LEVEL
         int
         default 0 if UBLOX_LOG_LEVEL_TRACE
-        default 1 if UBLOX_LOG_LEVEL_INFO
-        default 2 if UBLOX_LOG_LEVEL_WARN
-        default 3 if UBLOX_LOG_LEVEL_ERROR
-        default 4 if UBLOX_LOG_LEVEL_USER
-        default 5 if UBLOX_LOG_LEVEL_NONE
+        default 1 if UBLOX_LOG_LEVEL_DEBUG
+        default 2 if UBLOX_LOG_LEVEL_INFO
+        default 3 if UBLOX_LOG_LEVEL_WARN
+        default 4 if UBLOX_LOG_LEVEL_ERROR
+        default 5 if UBLOX_LOG_LEVEL_USER
+        default 6 if UBLOX_LOG_LEVEL_NONE
     endif
 endmenu
