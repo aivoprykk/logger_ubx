@@ -14,6 +14,7 @@
 #include <esp_log.h>
 #include <driver/gpio.h>
 #include <sys/time.h>
+#include "config.h"
 
 static const char *TAG = "ublox";
 
@@ -31,100 +32,133 @@ const char * ubx_event_strings(int id) {return "UBX_EVENT";}
 SemaphoreHandle_t xMutex = NULL;
 #define TIMEOUT_MAX portMAX_DELAY
 static const TickType_t timeout_immediate = 0;
+static ubx_ctx_t *ubx_ctx_global = NULL;
 
-RTC_DATA_ATTR ubx_rtc_config_t rtc_config = UBX_RTC_DEFAULT_CONFIG();
+// UBX config is now part of unified RTC config
+// Access via: g_rtc_config.ubx
 static const uint32_t ubx_baud_rates[] = {UBX_BAUD_RATE_LIST(NUMERIFY_V)};
 static const uint8_t ubx_hw_types[] = { UBX_TYPE_LIST(NUMERIFY_VV) };
 static const char * const ubx_hw_type_strings[] = { UBX_TYPE_LIST(STRINGIFY_M) };
 static const char * const ubx_baud_rate_strings[] = { UBX_BAUD_RATE_LIST(STRINGIFY_L) };
 
-bool lock(int timeout) {
+bool ubx_lock(int timeout) {
+    FUNC_ENTRY(TAG);
     if (!xMutex) return false;
-    const TickType_t timeout_ticks = (timeout == -1) ? TIMEOUT_MAX : 
-                                     (timeout == 0) ? timeout_immediate : pdMS_TO_TICKS(timeout);
-    return  xSemaphoreTake(xMutex, timeout_ticks) == pdTRUE;
+    const TickType_t timeout_ticks = (timeout == -1) ? portMAX_DELAY : pdMS_TO_TICKS(timeout);
+    return xSemaphoreTake(xMutex, timeout_ticks) == pdTRUE;
 }
 
-void unlock() {
+void ubx_unlock() {
+    FUNC_ENTRY(TAG);
     if (xMutex) {
         xSemaphoreGive(xMutex);
     }
 }
 
-ubx_config_t *ubx_config_new() {
+ubx_ctx_t *ubx_ctx_new() {
     FUNC_ENTRY(TAG);
-    ubx_config_t *ubx = (ubx_config_t *)calloc(1, sizeof(ubx_config_t));
+    ubx_ctx_t *ubx = (ubx_ctx_t *)calloc(1, sizeof(ubx_ctx_t));
     esp_err_t ret = ESP_OK;
-    ret = ubx_config_init(ubx);
+    ret = ubx_ctx_init(ubx);
     if (ret != ESP_OK) {
-        ELOG(TAG, "[%s] ubx_config_init failed", __FUNCTION__);
+        ELOG(TAG, "[%s] ubx_ctx_init failed", __FUNCTION__);
         free(ubx);
         return NULL;
     }
     return ubx;
 }
 
-esp_err_t ubx_config_delete(ubx_config_t *ubx_dev) {
+esp_err_t ubx_ctx_delete(ubx_ctx_t *ubx_ctx) {
     FUNC_ENTRY(TAG);
-    ubx_config_deinit(ubx_dev);
-    if(ubx_dev) {
-        free(ubx_dev);
+    ubx_ctx_deinit(ubx_ctx);
+    if(ubx_ctx) {
+        free(ubx_ctx);
         return ESP_OK;
     }
     return ESP_ERR_INVALID_ARG;
 }
 
-static esp_err_t ubx_config_init(ubx_config_t *ubx_dev) {
+void ubx_config_changed_cb(size_t group, size_t index) {
     FUNC_ENTRY(TAG);
-    if (ubx_dev == NULL)
+    if (group != SCFG_GROUP_UBX) {
+        return;
+    }
+    if(!ubx_ctx_global || !ubx_ctx_global->ready) {
+        ELOG(TAG, "[%s] ubx_ctx not ready", __FUNCTION__);
+        return;
+    }
+    FUNC_ENTRY_ARGS(TAG, "group: %zu, index: %zu", group, index);
+    switch (index) {
+        case cfg_ubx_ubx_gnss:
+        case cfg_ubx_ubx_output_rate:
+            FUNC_ENTRY_ARGS(TAG, "changed rate=%d gnss=%u", g_rtc_config.ubx.output_rate, g_rtc_config.ubx.gnss);
+            // Post event to trigger async reconfiguration instead of blocking
+            esp_event_post(UBX_EVENT, UBX_EVENT_CONFIG_CHANGED, NULL, 0, portMAX_DELAY);
+            break;
+        case cfg_ubx_ubx_nav_mode:
+            FUNC_ENTRY_ARGS(TAG, "changed nav_mode=%d", g_rtc_config.ubx.nav_mode);
+            // Post event to trigger async nav mode change instead of blocking
+            esp_event_post(UBX_EVENT, UBX_EVENT_NAV_MODE_CHANGED, NULL, 0, portMAX_DELAY);
+            break;
+        default:
+            break;
+    }
+}
+
+static esp_err_t ubx_ctx_init(ubx_ctx_t *ubx_ctx) {
+    FUNC_ENTRY(TAG);
+    if (ubx_ctx == NULL)
         return ESP_ERR_INVALID_ARG;
-    if(ubx_dev->initialized)
+    if(ubx_ctx->initialized)
         return ESP_OK;
     esp_err_t ret = ESP_OK;
-    ubx_config_t cfg = UBX_DEFAULT_CONFIG();
-    memcpy(ubx_dev, &cfg, sizeof(ubx_config_t));
-    ubx_dev->rtc_conf = &rtc_config;
-    ubx_dev->uart_conf.baud_rate = ubx_dev->rtc_conf->baud;
+    ubx_ctx_t cfg = UBX_DEFAULT_CTX();
+    memcpy(ubx_ctx, &cfg, sizeof(ubx_ctx_t));
+    ubx_ctx->rtc_conf = &g_rtc_config.ubx;
+    ubx_ctx->uart_conf.baud_rate = g_rtc_config.ubx.baud;
     if (xMutex == NULL)
         xMutex = xSemaphoreCreateMutex();
-    ubx_dev->initialized = true;
+    config_observer_add(ubx_config_changed_cb);
+    ubx_ctx->initialized = true;
+    ubx_ctx_global = ubx_ctx;
     return ret;
 }
 
-static esp_err_t ubx_config_deinit(ubx_config_t *ubx_dev) {
+static esp_err_t ubx_ctx_deinit(ubx_ctx_t *ubx_ctx) {
     FUNC_ENTRY(TAG);
     if (xMutex){
         vSemaphoreDelete(xMutex);
         xMutex = NULL;
     }
-    if (ubx_dev)
-        ubx_dev->initialized = false;
+    if (ubx_ctx)
+        ubx_ctx->initialized = false;
+    ubx_ctx_global = NULL;
     return ESP_OK;
 }
 
-static esp_err_t ubx_pins_init(ubx_config_t *ubx_dev) {
+static esp_err_t ubx_pins_init(ubx_ctx_t *ubx_ctx) {
     FUNC_ENTRY(TAG);
-    if (ubx_dev == NULL)
+    if (ubx_ctx == NULL)
         return ESP_ERR_INVALID_ARG;
     esp_err_t ret = ESP_OK;
     uint8_t i = 0;
     while (i < UBX_EN_PIN_LEN) {
-        if (ubx_dev->en_pins[i] == GPIO_NUM_NC){
+        if (ubx_ctx->en_pins[i] == GPIO_NUM_NC){
             goto next;
         }
-        ret = gpio_set_direction(ubx_dev->en_pins[i], GPIO_MODE_OUTPUT);
+        ret = gpio_set_direction(ubx_ctx->en_pins[i], GPIO_MODE_OUTPUT);
         if (ret != ESP_OK) {
-            ELOG(TAG, "[%s] gpio_set_direction failed, gpio:%d, i:%"PRIu8, __FUNCTION__, ubx_dev->en_pins[i], i);
+            ELOG(TAG, "[%s] gpio_set_direction failed, gpio:%d, i:%"PRIu8, __FUNCTION__, ubx_ctx->en_pins[i], i);
             goto done;
         }
-        ret = gpio_set_level(ubx_dev->en_pins[i], true);
+        ret = gpio_set_level(ubx_ctx->en_pins[i], true);
         if (ret != ESP_OK) {
-            ELOG(TAG, "[%s] gpio_set_level failed, gpio:%d, i:%"PRIu8, __FUNCTION__, ubx_dev->en_pins[i], i);
+            ELOG(TAG, "[%s] gpio_set_level failed, gpio:%d, i:%"PRIu8, __FUNCTION__, ubx_ctx->en_pins[i], i);
             goto done;
         }
-        ret = gpio_set_drive_capability(ubx_dev->en_pins[i], GPIO_DRIVE_CAP_3);
+        ret = gpio_set_drive_capability(ubx_ctx->en_pins[i], GPIO_DRIVE_CAP_3);
         if (ret != ESP_OK) {
-            ELOG(TAG, "[%s] gpio_set_drive_capability failed, gpio:%d, i:%"PRIu8, __FUNCTION__, ubx_dev->en_pins[i], i);
+            ELOG(TAG, "[%s] gpio_set_drive_capability failed, gpio:%d, i:%"PRIu8, __FUNCTION__, ubx_ctx->en_pins[i], i);
             goto done;
         }
         next:
@@ -134,16 +168,16 @@ static esp_err_t ubx_pins_init(ubx_config_t *ubx_dev) {
     return ret;
 }
 
-static esp_err_t ubx_pins_deinit(ubx_config_t *ubx_dev) {
+static esp_err_t ubx_pins_deinit(ubx_ctx_t *ubx_ctx) {
     FUNC_ENTRY(TAG);
-    if (ubx_dev == NULL)
+    if (ubx_ctx == NULL)
         return ESP_ERR_INVALID_ARG;
     esp_err_t ret = ESP_OK;
     uint8_t i = 0;
     while (i < UBX_EN_PIN_LEN) {
-        if (ubx_dev->en_pins[i] == GPIO_NUM_NC)
+        if (ubx_ctx->en_pins[i] == GPIO_NUM_NC)
             goto next;
-        ret = gpio_set_level(ubx_dev->en_pins[i], false);
+        ret = gpio_set_level(ubx_ctx->en_pins[i], false);
         if (ret != ESP_OK) {
             ELOG(TAG, "[%s] gpio_set_level failed", __FUNCTION__);
         }
@@ -153,38 +187,33 @@ static esp_err_t ubx_pins_deinit(ubx_config_t *ubx_dev) {
     return ret;
 }
 
-static esp_err_t ubx_uart_init(ubx_config_t *ubx_dev) {
+static esp_err_t ubx_uart_init(ubx_ctx_t *ubx_ctx) {
     FUNC_ENTRY(TAG);
-    if (ubx_dev == NULL)
+    if (ubx_ctx == NULL)
         return ESP_ERR_INVALID_ARG;
-    if(ubx_dev->uart_setup_ok)
+    if(ubx_ctx->uart_is_on)
         return ESP_OK;
-    if (!ubx_dev->initialized) {
-#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
-        assert(0 && "ubx_config_init(cfg) must be called first");
-#else
-        ELOG(TAG, "[%s] ubx_config_init(cfg) must be called first", __FUNCTION__);
-        return ESP_ERR_INVALID_STATE;
-#endif
+    if (!ubx_ctx->initialized) {
+        ELOG(TAG, "[%s] ubx_ctx_init(cfg) must be called first", __FUNCTION__);
     }
     esp_err_t ret = ESP_OK;
 
-    if(lock(1000)) {
+    if(config_lock(1000)) {
 
-        ret = ubx_pins_init(ubx_dev);
+        ret = ubx_pins_init(ubx_ctx);
         if (ret != ESP_OK) {
-            ELOG(TAG, "[%s] _dubx_dev_pins_init failed: %s", __FUNCTION__, esp_err_to_name(ret));
+            ELOG(TAG, "[%s] _dubx_ctx_pins_init failed: %s", __FUNCTION__, esp_err_to_name(ret));
             goto done;
         }
 
-        ret = uart_param_config(ubx_dev->uart_num, &(ubx_dev->uart_conf));
+        ret = uart_param_config(ubx_ctx->uart_num, &(ubx_ctx->uart_conf));
         if (ret != ESP_OK) {
             ELOG(TAG, "[%s] uart_param_config failed", __FUNCTION__);
             goto done;
         }
-        ret = uart_set_pin(ubx_dev->uart_num, ubx_dev->tx_pin, ubx_dev->rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+        ret = uart_set_pin(ubx_ctx->uart_num, ubx_ctx->tx_pin, ubx_ctx->rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
         if (ret == ESP_OK) {
-            ret = uart_set_sw_flow_ctrl(ubx_dev->uart_num, false, 0, 0);
+            ret = uart_set_sw_flow_ctrl(ubx_ctx->uart_num, false, 0, 0);
             if (ret != ESP_OK) {
                 ELOG(TAG, "[%s] uart_set_sw_flow_ctrl failed", __FUNCTION__);
                 goto done;
@@ -197,7 +226,7 @@ static esp_err_t ubx_uart_init(ubx_config_t *ubx_dev) {
 #if CONFIG_UART_ISR_IN_IRAM
         intr_alloc_flags = ESP_INTR_FLAG_IRAM;
 #endif
-        ret = uart_driver_install(ubx_dev->uart_num, 1024, 0, 0, NULL, intr_alloc_flags);
+        ret = uart_driver_install(ubx_ctx->uart_num, 1024, 0, 0, NULL, intr_alloc_flags);
         if (ret != ESP_OK) {
             ELOG(TAG, "[%s] uart_driver_install failed", __FUNCTION__);
             goto done;
@@ -205,334 +234,306 @@ static esp_err_t ubx_uart_init(ubx_config_t *ubx_dev) {
         done:
         esp_event_post(UBX_EVENT, !ret ? UBX_EVENT_UART_INIT_DONE : UBX_EVENT_UART_INIT_FAIL, NULL,0, portMAX_DELAY);
         if(!ret) {
-            ubx_dev->uart_setup_ok = true;
+            ubx_ctx->uart_is_on = true;
         }
 #if (C_LOG_LEVEL <= LOG_INFO_NUM)
         else {
             ELOG(TAG, "[%s] ubx_uart_init failed", __FUNCTION__);
         }
-        DLOG(TAG, "[%s] done", __FUNCTION__);
+        FUNC_ENTRY_ARGSD(TAG, "[%s] done", __FUNCTION__);
 #endif
-        unlock();
+        config_unlock();
     }
     delay_ms(100);
     return ret;
 }
 
-static esp_err_t ubx_uart_deinit(ubx_config_t *ubx_dev) {
+static esp_err_t ubx_uart_deinit(ubx_ctx_t *ubx_ctx) {
     FUNC_ENTRY(TAG);
-    if (ubx_dev == NULL)
+    if (ubx_ctx == NULL)
         return ESP_ERR_INVALID_ARG;
-    // if (!ubx_dev->uart_setup_ok)
+    // if (!ubx_ctx->uart_is_on)
     //     return ESP_OK;
     esp_err_t ret = ESP_OK;
-    if(lock(1000)) {
-        ret = uart_driver_delete(ubx_dev->uart_num);
+    if(ubx_lock(1000)) {
+        ret = uart_driver_delete(ubx_ctx->uart_num);
         if (ret != ESP_OK) {
             ELOG(TAG, "[%s] uart_driver_delete failed", __FUNCTION__);
         }
 
-        ret = ubx_pins_deinit(ubx_dev);
+        ret = ubx_pins_deinit(ubx_ctx);
         if (ret != ESP_OK) {
             ELOG(TAG, "[%s] ubx_pins_deinit failed", __FUNCTION__);
         }
         if (!ret) {
             esp_event_post(UBX_EVENT, UBX_EVENT_UART_DEINIT_DONE, NULL,0, portMAX_DELAY);
-            ubx_dev->uart_setup_ok = false;
+            ubx_ctx->uart_is_on = false;
         }
 #if (C_LOG_LEVEL <= LOG_INFO_NUM)
         else {
             ELOG(TAG, "[%s] ubx_uart_deinit failed", __FUNCTION__);
         }
-        DLOG(TAG, "[%s] done", __FUNCTION__);
+        FUNC_ENTRY_ARGSD(TAG, "[%s] done", __FUNCTION__);
 #endif
-        unlock();
+        ubx_unlock();
     }
     return ret;
 }
 
-esp_err_t ubx_on(ubx_config_t *ubx_dev) {
-    FUNC_ENTRY_ARGS(TAG, " %p", ubx_dev);
-    if (ubx_dev == NULL)
+esp_err_t ubx_on(ubx_ctx_t *ubx_ctx) {
+    FUNC_ENTRY_ARGS(TAG, " %p", ubx_ctx);
+    if (ubx_ctx == NULL)
         return ESP_ERR_INVALID_ARG;
     IMEAS_START();
     esp_err_t ret = ESP_OK;
-    ret = ubx_uart_init(ubx_dev);
+    ret = ubx_uart_init(ubx_ctx);
     IMEAS_END(TAG);
-    ubx_dev->is_on = true;
     return ret;
 }
 
-esp_err_t ubx_off(ubx_config_t *ubx_dev) {
-    FUNC_ENTRY_ARGS(TAG, " %p", ubx_dev);
-    if (ubx_dev == NULL)
+esp_err_t ubx_off(ubx_ctx_t *ubx_ctx) {
+    FUNC_ENTRY_ARGS(TAG, " %p", ubx_ctx);
+    if (ubx_ctx == NULL)
         return ESP_ERR_INVALID_ARG;
     IMEAS_START();
     esp_err_t ret = ESP_OK;
-    ret = ubx_uart_deinit(ubx_dev);
+    ret = ubx_uart_deinit(ubx_ctx);
     if (ret != ESP_OK) {
         ELOG(TAG, "[%s] ubx_uart_deinit failed", __FUNCTION__);
     }
-    ubx_dev->ready = false;
-    ubx_dev->is_on = false;
-    ubx_dev->ready_time = 0;
-    ubx_dev->shutdown_requested = false;
+    ubx_ctx->ready = false;
+    ubx_ctx->ready_time = 0;
+    ubx_ctx->shutdown_requested = false;
     IMEAS_END(TAG);
     return ret;
 }
 
-static esp_err_t fix_config(ubx_config_t *ubx_dev) {
-    if (ubx_dev == NULL)
-        return ESP_ERR_INVALID_ARG;
-    uint8_t gnss = ubx_dev->rtc_conf->gnss;
+static esp_err_t fix_config(ubx_ctx_t *ubx_ctx) {
+    if (ubx_ctx == NULL) return ESP_ERR_INVALID_ARG;
+    uint8_t gnss = g_rtc_config.ubx.gnss;
     uint8_t gnss_count = 1;
-    if(gnss<=5) ubx_dev->rtc_conf->gnss = gnss = ubx_dev->rtc_conf->hw_type >= UBX_TYPE_M9 ? 111 : 103;
-    if(ubx_dev->rtc_conf->gnss == 111 && ubx_dev->rtc_conf->hw_type < UBX_TYPE_M9) ubx_dev->rtc_conf->gnss = gnss = 103;
+    if(gnss<=5) g_rtc_config.ubx.gnss = gnss = ubx_ctx->hw_type >= UBX_TYPE_M9 ? 111 : 103;
+    if(g_rtc_config.ubx.gnss == 111 && ubx_ctx->hw_type < UBX_TYPE_M9) g_rtc_config.ubx.gnss = gnss = 103;
     if(BIT_GET(gnss, UBX_GNSS_GALILEO) != 0) ++gnss_count; // galileo
     if(BIT_GET(gnss, UBX_GNSS_BEIDOU) != 0) ++gnss_count; // beidou
     if(BIT_GET(gnss, UBX_GNSS_GLONASS) != 0) ++gnss_count; // glonass
     if(gnss_count > 4) gnss_count = 4;
-    ubx_dev->rtc_conf->gnss_count = gnss_count;
-    if(ubx_dev->rtc_conf->hw_type == UBX_TYPE_M8){
-        if(ubx_dev->rtc_conf->gnss_count >= 2 && ubx_dev->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
-            DLOG(TAG, "[%s] 2 gnss, output rate > 10hz, fallback to 10hz", __FUNCTION__);
-            ubx_dev->rtc_conf->output_rate = UBX_OUTPUT_10HZ;
+    ubx_ctx->gnss_count = gnss_count;
+
+    // Fix invalid output_rate (0 or invalid value)
+    if(g_rtc_config.ubx.output_rate == 0 || g_rtc_config.ubx.output_rate > UBX_OUTPUT_20HZ) {
+        FUNC_ENTRY_ARGSD(TAG, "[%s] Invalid output_rate %d, setting to default UBX_OUTPUT_5HZ", g_rtc_config.ubx.output_rate);
+        g_rtc_config.ubx.output_rate = UBX_OUTPUT_5HZ;
+    }
+    if(ubx_ctx->hw_type == UBX_TYPE_M8){
+        if(ubx_ctx->gnss_count >= 2 && g_rtc_config.ubx.output_rate > UBX_OUTPUT_10HZ){
+            FUNC_ENTRY_ARGSD(TAG, "[%s] 2 gnss, output rate > 10hz, fallback to 10hz");
+            g_rtc_config.ubx.output_rate = UBX_OUTPUT_10HZ;
         }
-        else if(ubx_dev->rtc_conf->gnss_count == 1 && ubx_dev->rtc_conf->output_rate > UBX_OUTPUT_5HZ){
-            DLOG(TAG, "[%s] 1 gnss, output rate > 5hz, fallback to 5hz", __FUNCTION__);
-            ubx_dev->rtc_conf->output_rate = UBX_OUTPUT_5HZ;
+        else if(ubx_ctx->gnss_count == 1 && g_rtc_config.ubx.output_rate > UBX_OUTPUT_5HZ){
+            FUNC_ENTRY_ARGSD(TAG, "[%s] 1 gnss, output rate > 5hz, fallback to 5hz");
+            g_rtc_config.ubx.output_rate = UBX_OUTPUT_5HZ;
         }
     }
-    if(ubx_dev->rtc_conf->hw_type == UBX_TYPE_M10){
-        if(ubx_dev->rtc_conf->gnss_count == 4 && ubx_dev->rtc_conf->output_rate > UBX_OUTPUT_10HZ){
-            DLOG(TAG, "[%s] 4 gnss, output rate > 10hz, fallback to 10hz", __FUNCTION__);
-            ubx_dev->rtc_conf->output_rate = UBX_OUTPUT_10HZ;
+    if(ubx_ctx->hw_type == UBX_TYPE_M10){
+        if(ubx_ctx->gnss_count == 4 && g_rtc_config.ubx.output_rate > UBX_OUTPUT_10HZ){
+            FUNC_ENTRY_ARGSD(TAG, "[%s] 4 gnss, output rate > 10hz, fallback to 10hz");
+            g_rtc_config.ubx.output_rate = UBX_OUTPUT_10HZ;
         }
-        else if(ubx_dev->rtc_conf->gnss_count == 3 && ubx_dev->rtc_conf->output_rate > UBX_OUTPUT_16HZ){
-            DLOG(TAG, "[%s] 3 gnss, output rate > 16hz, fallback to 16hz", __FUNCTION__);
-            ubx_dev->rtc_conf->output_rate = UBX_OUTPUT_16HZ;
+        else if(ubx_ctx->gnss_count == 3 && g_rtc_config.ubx.output_rate > UBX_OUTPUT_16HZ){
+            FUNC_ENTRY_ARGSD(TAG, "[%s] 3 gnss, output rate > 16hz, fallback to 16hz");
+            g_rtc_config.ubx.output_rate = UBX_OUTPUT_16HZ;
         }
-        else if(ubx_dev->rtc_conf->gnss_count == 2 && ubx_dev->rtc_conf->output_rate > UBX_OUTPUT_20HZ){
-            DLOG(TAG, "[%s] 2 gnss, output rate > 20hz, fallback to 20hz", __FUNCTION__);
-            ubx_dev->rtc_conf->output_rate = UBX_OUTPUT_20HZ;
+        else if(ubx_ctx->gnss_count == 2 && g_rtc_config.ubx.output_rate > UBX_OUTPUT_20HZ){
+            FUNC_ENTRY_ARGSD(TAG, "[%s] 2 gnss, output rate > 20hz, fallback to 20hz");
+            g_rtc_config.ubx.output_rate = UBX_OUTPUT_20HZ;
         }
     }
     return ESP_OK;
 }
 
-esp_err_t ubx_set_ggnss_and_rate(ubx_config_t *ubx_dev, uint8_t gnss, uint8_t rate) {
+esp_err_t ubx_set_gnss_and_rate(ubx_ctx_t *ubx_ctx, uint8_t gnss, uint8_t rate) {
     FUNC_ENTRY(TAG);
-    if (ubx_dev == NULL)
-        return ESP_ERR_INVALID_ARG;
+    if (ubx_ctx == NULL) return ESP_ERR_INVALID_ARG;
     esp_err_t ret = ESP_OK;
     uint8_t try, max_tries=3;
-    fix_config(ubx_dev);
-    // if(ubx_dev->rtc_conf->msgout_sat){
+    fix_config(ubx_ctx);
+    // Update rate parameter with the fixed value from config
+    rate = g_rtc_config.ubx.output_rate;
+    // Ensure rate is valid
+    if (rate == 0 || rate > UBX_OUTPUT_20HZ) {
+        WLOG(TAG, "[%s] Invalid rate %d from config, using UBX_OUTPUT_5HZ", __func__, rate);
+        rate = UBX_OUTPUT_5HZ;
+        g_rtc_config.ubx.output_rate = rate;
+    }
+    FUNC_ENTRY_ARGSD(TAG, "fix done, gnss: %"PRIu8", rate: %"PRIu8"", gnss, rate);
+    // if(g_rtc_config.ubx.msgout_sat){
         for(try = 0;try<=max_tries; ++try) {
-            if(ubx_dev->shutdown_requested)
-                goto fail;
-            ret = ubx_set_msgout_sat(ubx_dev);
-            if(ret == ESP_OK)
-            break;
+            if(ubx_ctx->shutdown_requested) goto fail;
+            ret = ubx_set_msgout_sat(ubx_ctx);
+            if(ret == ESP_OK) break;
         }
         if (ret != ESP_OK) {
             ELOG(TAG, "[%s] ubx_set_msgout_sat failed", __func__);
         }
     // }
-
+    FUNC_ENTRY_ARGSD(TAG, "msgout_sat done");
     for(try = 0;try<=max_tries; ++try) {
-        if(ubx_dev->shutdown_requested)
-            goto fail;
-        ret = ubx_set_gnss(ubx_dev, gnss);
-        delay_ms(300); // 0.5s required to reset gnss
-        if(ret == ESP_OK)
+        if(ubx_ctx->shutdown_requested) goto fail;
+        ret = ubx_set_gnss(ubx_ctx, gnss);
+        if(ret == ESP_OK) {
+            delay_ms(300); // 0.5s required to reset gnss
             break;
+        }
     }
     if (ret != ESP_OK) {
         ELOG(TAG, "[%s] ubx_set_gnss failed", __func__);
         goto fail;
     }
-
+    FUNC_ENTRY_ARGSD(TAG, "set_gnss done");
+    
     for(try = 0;try<=max_tries; ++try) {
-        if(ubx_dev->shutdown_requested)
-            goto fail;
-        ret = ubx_set_uart_out_rate(ubx_dev, rate);
-        if(ret == ESP_OK)
-            break;
+        if(ubx_ctx->shutdown_requested) goto fail;
+        ret = ubx_set_uart_out_rate(ubx_ctx, rate);
+        if(ret == ESP_OK) break;
     }
     if (ret != ESP_OK) {
         ELOG(TAG, "[%s] ubx_set_uart_out_rate failed", __func__);
         goto fail;
     }
+    FUNC_ENTRY_ARGSD(TAG, "set_rate done");
     esp_event_post(UBX_EVENT, UBX_EVENT_SAMPLE_RATE_CHANGED, 0, 0, portMAX_DELAY);
     fail:
+    FUNC_ENTRY_ARGSD(TAG, "done, status %d", ret);
     return ret;
 }
 
 #if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
-int print_ubx_dev_state(ubx_config_t *ubx_dev) {
-    if (ubx_dev == NULL){
+int print_ubx_ctx_state(ubx_ctx_t *ubx_ctx) {
+    if (ubx_ctx == NULL){
         ELOG(TAG, "[%s] invalid argument, no dev!!", __func__);
         return ESP_ERR_INVALID_ARG;
     }
     esp_err_t ret = ESP_OK;
     printf("----- UBX device state -----\n");
-    printf("Ublox type: %s\n", ubx_dev->Ublox_type);
-    printf("HW type: %s (%d)\n", rtc_config.hw_type < sizeof(ubx_hw_type_strings)/sizeof(char*) ? ubx_hw_type_strings[rtc_config.hw_type] : "Unknown", rtc_config.hw_type);
-    printf("HW id: %s\n", (char*)rtc_config.hw_id);
-    printf("Baud rate: %s (%d)\n", rtc_config.baud < sizeof(ubx_baud_rate_strings)/sizeof(char*) ? ubx_baud_rate_strings[rtc_config.baud] : "Unknown", rtc_config.baud);
-    printf("GNSS: %"PRIu8" (count: %"PRIu8")\n", rtc_config.gnss, rtc_config.gnss_count);
-    printf("Output rate: %"PRIu8" Hz\n", rtc_config.output_rate == 0 ? 0 : (uint8_t)(1000/HZ_TO_MS(rtc_config.output_rate)));
-    printf("Nav mode: %d\n", rtc_config.nav_mode);
-    printf("Message out sat: %d\n", rtc_config.msgout_sat);
+    printf("Ublox type: %s\n", ubx_ctx->Ublox_type);
+    printf("HW type: %s (%d)\n", ubx_ctx->hw_type < sizeof(ubx_hw_type_strings)/sizeof(char*) ? ubx_hw_type_strings[ubx_ctx->hw_type] : "Unknown", ubx_ctx->hw_type);
+    printf("HW id: %s\n", (char*)ubx_ctx->hw_id);
+    printf("Baud rate: %s (%d)\n", g_rtc_config.ubx.baud < sizeof(ubx_baud_rate_strings)/sizeof(char*) ? ubx_baud_rate_strings[g_rtc_config.ubx.baud] : "Unknown", g_rtc_config.ubx.baud);
+    printf("GNSS: %"PRIu8" (count: %"PRIu8")\n", g_rtc_config.ubx.gnss, ubx_ctx->gnss_count);
+    printf("Output rate: %"PRIu8" Hz\n", g_rtc_config.ubx.output_rate == 0 ? 0 : (uint8_t)(1000/HZ_TO_MS(g_rtc_config.ubx.output_rate)));
+    printf("Nav mode: %d\n", g_rtc_config.ubx.nav_mode);
+    printf("Message out sat: %d\n", g_rtc_config.ubx.msgout_sat);
 
-    printf("UBX Initialized: %s\n", ubx_dev->initialized ? "true" : "false");
-    printf("UART setup ok: %s\n", ubx_dev->uart_setup_ok ? "true" : "false");
-    printf("UBX Setup in progress: %s\n", ubx_dev->setup_progress ? "true" : "false");
-    printf("UBX ready: %s\n", ubx_dev->ready ? "true" : "false");
-    printf("UBX Is on: %s\n", ubx_dev->is_on ? "true" : "false");
+    printf("UBX Initialized: %s\n", ubx_ctx->initialized ? "true" : "false");
+    printf("UART setup ok: %s\n", ubx_ctx->uart_is_on ? "true" : "false");
+    printf("UBX Setup in progress: %s\n", ubx_ctx->setup_progress ? "true" : "false");
+    printf("UBX ready: %s\n", ubx_ctx->ready ? "true" : "false");
+    printf("UBX Is on: %s\n", ubx_ctx->uart_is_on ? "true" : "false");
 
     printf("----- UBX device state -----\n");
     return ret;
 }
 #endif
 
-esp_err_t ubx_setup(ubx_config_t *ubx_dev) {
+// Helper macro for UBX setup operations with retry logic
+#define UBX_SETUP_TRY_OP(op_call, op_name, critical) \
+    do { \
+        for(try = 0; try <= max_tries; ++try) { \
+            if(ubx_ctx->shutdown_requested) \
+                goto fail; \
+            ret = (op_call); \
+            if(ret == ESP_OK) \
+                break; \
+        } \
+        if (ret != ESP_OK) { \
+            ELOG(TAG, "[%s] " op_name " failed", __FUNCTION__); \
+            if (critical) goto fail; \
+        } \
+    } while(0)
+
+esp_err_t ubx_setup(ubx_ctx_t *ubx_ctx) {
     FUNC_ENTRY(TAG);
-    IMEAS_START();
     esp_err_t ret = ESP_OK;
-    if (ubx_dev == NULL){
+    if (ubx_ctx == NULL){
         ret  = ESP_ERR_INVALID_ARG;
-        goto silent;
+        goto end;
     }
 #if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
-    print_ubx_dev_state(ubx_dev);
+    print_ubx_ctx_state(ubx_ctx);
 #endif
-    if(ubx_dev->ready || ubx_dev->setup_progress){
+    if(ubx_ctx->ready || ubx_ctx->setup_progress){
         FUNC_ENTRY_ARGS(TAG, " already setup done or processing");
-        goto silent;
+        goto end;
     }
-    ubx_dev->setup_progress = 1;
-    ret = ubx_on(ubx_dev);
+    IMEAS_START();
+    ubx_ctx->setup_progress = 1;
+    
+    // Critical operations - setup fails if these don't work
+    ret = ubx_on(ubx_ctx);
     if (ret != ESP_OK) {
         ELOG(TAG, "[%s] ubx_on failed", __FUNCTION__);
         goto fail;
     }
-    // initial read
-    ret = ubx_initial_read(ubx_dev, false);
     
-    // find hw model
+    ret = ubx_initial_read(ubx_ctx, false);
+    if (ret != ESP_OK) {
+        ELOG(TAG, "[%s] ubx_initial_read failed", __FUNCTION__);  
+        goto fail;
+    }
+    
     uint8_t try, max_tries=3;
-    for(try = 0;try<=max_tries; ++try) {
-        if(ubx_dev->shutdown_requested)
-            goto fail;
-        ret = ubx_get_hw_version(ubx_dev);
-        if(ret == ESP_ERR_TIMEOUT)
-            goto fail;
-        if(ret == ESP_OK)
-            break;
-    }
+    
+    UBX_SETUP_TRY_OP(ubx_get_hw_version(ubx_ctx), "ubx_get_hw_version", true);
+    UBX_SETUP_TRY_OP(ubx_set_prot_msg_out(ubx_ctx, false, true), "ubx_set_prot_msg_out", true);
+    
+    // Non-critical operations - log errors but continue
+    UBX_SETUP_TRY_OP(ubx_set_nav_mode(ubx_ctx, g_rtc_config.ubx.nav_mode), "ubx_set_nav_mode", false);
+    UBX_SETUP_TRY_OP(ubx_set_msgout(ubx_ctx), "ubx_set_msgout", false);
+    
+    // Critical GNSS setup
+    ret = ubx_set_gnss_and_rate(ubx_ctx, g_rtc_config.ubx.gnss, g_rtc_config.ubx.output_rate);
     if (ret != ESP_OK) {
-        ELOG(TAG, "[%s] ubx_get_hw_version failed", __FUNCTION__);
+        ELOG(TAG, "[%s] ubx_set_gnss_and_rate failed", __FUNCTION__);
         goto fail;
     }
     
-    // set ubx message protocol
-    for(try = 0;try<=max_tries; ++try) {
-        if(ubx_dev->shutdown_requested)
-            goto fail;
-        ret = ubx_set_prot_msg_out(ubx_dev, false, true);
-        if(ret == ESP_OK)
-            break;
-    }
-    if (ret != ESP_OK) {
-        ELOG(TAG, "[%s] ubx_prot_msg_out failed", __FUNCTION__);
-        goto fail;
-    }
+    FUNC_ENTRY_ARGSD(TAG, "[%s]  ubx_ctx->hw_id: %s, ubx_ctx->hw_type: %d", __FUNCTION__, &ubx_ctx->hw_id[0], ubx_ctx->hw_type);
     
-    // if(ubx_dev->rtc_conf->hw_type == UBX_TYPE_M8){
-        for(try = 0;try<=max_tries; ++try) {
-            if(ubx_dev->shutdown_requested)
-                goto fail;
-            ret = ubx_set_nav_mode(ubx_dev, ubx_dev->rtc_conf->nav_mode);
-            if(ret == ESP_OK)
-            break;
+    UBX_SETUP_TRY_OP(ubx_get_hw_id(ubx_ctx), "ubx_get_hw_id", false);
+    UBX_SETUP_TRY_OP(ubx_get_gnss(ubx_ctx), "ubx_get_gnss", true);
+    
+    if(!ubx_ctx->shutdown_requested){
+        esp_event_post(UBX_EVENT, UBX_EVENT_SETUP_DONE, NULL,0, portMAX_DELAY);
+        if(!ret){
+            WLOG(TAG, "[%s] setup done, device ready!", __func__);
+            ubx_ctx->ready = true;
+            ubx_ctx->ready_time = get_millis();
         }
-        if (ret != ESP_OK) {
-            ELOG(TAG, "[%s] ubx_set_nav_mode failed", __FUNCTION__);
-        }
-    // }
-
-    for(try = 0;try<=max_tries; ++try) {
-        if(ubx_dev->shutdown_requested)
-            goto fail;
-        ret = ubx_set_msgout(ubx_dev);
-        if(ret == ESP_OK)
-            break;
-    }
-    if (ret != ESP_OK) {
-        ELOG(TAG, "[%s] ubx_set_msgout failed", __FUNCTION__);
-    }
-    
-    ret = ubx_set_ggnss_and_rate(ubx_dev, ubx_dev->rtc_conf->gnss, ubx_dev->rtc_conf->output_rate);
-    if (ret != ESP_OK) {
-        goto fail;
-    }
-    DLOG(TAG, "[%s]  ubx->rtc_conf->hw_id: %s, ubx->rtc_conf->hw_type: %d", __FUNCTION__, &ubx_dev->rtc_conf->hw_id[0], ubx_dev->rtc_conf->hw_type);
-    for(try = 0; try <= max_tries; ++try) {
-        if(ubx_dev->shutdown_requested)
-            goto fail;
-        ret = ubx_get_hw_id(ubx_dev);
-        if(ret == ESP_OK)
-            break;
-        delay_ms(100);
-    }
-    if (ret != ESP_OK) {
-        ELOG(TAG, "[%s] ubx_get_hw_id failed", __FUNCTION__);
-        // goto fail;
-    }
-
-    for(try = 0;try<=max_tries; ++try) {
-        if(ubx_dev->shutdown_requested)
-            goto fail;
-        ret = ubx_get_gnss(ubx_dev);
-        if(ret == ESP_OK)
-            break;
-    }
-    if (ret != ESP_OK) {
-        ELOG(TAG, "[%s] ubx_get_gnss failed", __FUNCTION__);
-        goto fail;
     }
     fail:
-    ubx_dev->setup_progress = 0;
-    esp_event_post(UBX_EVENT, !ret && !ubx_dev->shutdown_requested ? UBX_EVENT_SETUP_DONE : UBX_EVENT_SETUP_FAIL, NULL,0, portMAX_DELAY);
-    silent:
-    if(!ret && ubx_dev && !ubx_dev->ready && !ubx_dev->shutdown_requested && !ubx_dev->setup_progress){
-#if (C_LOG_LEVEL <= LOG_INFO_NUM)
-        WLOG(TAG, "[%s] setup done, device ready!", __func__);
-#endif
-        ubx_dev->ready = true;
-        ubx_dev->ready_time = get_millis();
-    }
+    ubx_ctx->setup_progress = 0;
     IMEAS_END(TAG);
+    end:
 #if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
-    print_ubx_dev_state(ubx_dev);
+    print_ubx_ctx_state(ubx_ctx);
 #endif
     return ret;
-
 }
 
-esp_err_t ubx_set_nav_mode(ubx_config_t *ubx, ubx_nav_mode_t nav_mode) {
+#undef UBX_SETUP_TRY_OP
+
+esp_err_t ubx_set_nav_mode(ubx_ctx_t *ubx, ubx_nav_mode_t nav_mode) {
     FUNC_ENTRY(TAG);
     if (ubx == NULL)
         return ESP_ERR_INVALID_ARG;
     esp_err_t ret = ESP_OK;
-    DLOG(TAG, "[%s] going to set nav mode: %u", __FUNCTION__, nav_mode);
+    FUNC_ENTRY_ARGSD(TAG, "[%s] going to set nav mode: %u", nav_mode);
     ret = ubx_cfg_valset(ubx, (const uint8_t[]){
         0x1c, 0x00, 0x11, 0x20, (uint8_t)nav_mode
         }, 5, true);
     if(!ret){
-        DLOG(TAG, "[%s] nav mode set to %s", __FUNCTION__, nav_mode == 0 ? "PORT" : nav_mode == 2 ? "STAT" : (nav_mode == 3) ? "PED" : nav_mode == 4 ? "AUTOMOT" : "SEA");
+        FUNC_ENTRY_ARGSD(TAG, "[%s] nav mode set to %s", nav_mode == 0 ? "PORT" : nav_mode == 2 ? "STAT" : (nav_mode == 3) ? "PED" : nav_mode == 4 ? "AUTOMOT" : "SEA");
         return ret;
     }
     // fallback old cfg_msg as valset failed
@@ -555,19 +556,19 @@ esp_err_t ubx_set_nav_mode(ubx_config_t *ubx, ubx_nav_mode_t nav_mode) {
     }, 36, true);
 }
 
-static esp_err_t ubx_set_prot_msg_out(ubx_config_t *ubx, bool enable_nmea, bool enable_ubx) {
+static esp_err_t ubx_set_prot_msg_out(ubx_ctx_t *ubx, bool enable_nmea, bool enable_ubx) {
     FUNC_ENTRY(TAG);
     if (ubx == NULL)
         return ESP_ERR_INVALID_ARG;
     esp_err_t ret = ESP_OK;
     if(!enable_nmea && !enable_ubx)
         enable_ubx=true;
-    DLOG(TAG, "[%s] going to enable_nmea: %u, enable_ubx: %u", __FUNCTION__, enable_nmea, enable_ubx);
+    FUNC_ENTRY_ARGSD(TAG, "[%s] going to enable_nmea: %u, enable_ubx: %u", __FUNCTION__, enable_nmea, enable_ubx);
     ret = ubx_cfg_valset(ubx, (const uint8_t[]){
         0x02, 0x00, 0x74, 0x10, enable_nmea ? 0x01 : 0x00,
         0x01, 0x00, 0x74, 0x10, enable_ubx ? 0x01 : 0x00},10, true);
     if(!ret){
-        DLOG(TAG, "[%s] message protocol set to %s", __FUNCTION__, enable_nmea && enable_ubx ? "NMEA and UBX" : enable_nmea ? "NMEA" : "UBX");
+        FUNC_ENTRY_ARGSD(TAG, "[%s] message protocol set to %s", enable_nmea && enable_ubx ? "NMEA and UBX" : enable_nmea ? "NMEA" : "UBX");
         return ret;
     }
     // fallback hw m8 and below
@@ -583,12 +584,12 @@ static esp_err_t ubx_set_prot_msg_out(ubx_config_t *ubx, bool enable_nmea, bool 
                                   }, 20, true);
 }
 
-static esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, int baud) {
+static esp_err_t ubx_set_uart_baud_rate(ubx_ctx_t *ubx, int baud) {
     FUNC_ENTRY(TAG);
     if (ubx == NULL)
         return ESP_ERR_INVALID_ARG;
-            if(baud == ubx->rtc_conf->baud){
-        DLOG(TAG, "[%s] baud rate already set to %d, no changes made.", __FUNCTION__, baud);
+            if(baud == g_rtc_config.ubx.baud){
+        FUNC_ENTRY_ARGSD(TAG, "[%s] baud rate already set to %d, no changes made.", baud);
         return ESP_OK;
     }
     esp_err_t ret = ESP_OK;
@@ -615,15 +616,20 @@ static esp_err_t ubx_set_uart_baud_rate(ubx_config_t *ubx, int baud) {
         /* reserved3 u2 */ 0x00, 0x00
     }, 20, false);
     done:
-    ubx->rtc_conf->baud = baud;
+    g_rtc_config.ubx.baud = baud;
     ret = ubx_uart_set_baud(ubx);
     return ESP_OK;
 }
 
-static esp_err_t ubx_set_uart_out_rate(ubx_config_t *ubx, uint8_t rate) {
+static esp_err_t ubx_set_uart_out_rate(ubx_ctx_t *ubx, uint8_t rate) {
     FUNC_ENTRY(TAG);
     if (ubx == NULL)
         return ESP_ERR_INVALID_ARG;
+    // Check for invalid rate values that would cause division by zero or invalid operation
+    if (rate == 0 || rate > UBX_OUTPUT_20HZ) {
+        ELOG(TAG, "[%s] Invalid rate %d, setting to UBX_OUTPUT_5HZ", __func__, rate);
+        rate = UBX_OUTPUT_5HZ;
+    }
     esp_err_t ret = ESP_OK;
     uint8_t output_vec[2]={0,0};
     int baud = UBX_BAUD_38400;
@@ -638,7 +644,7 @@ static esp_err_t ubx_set_uart_out_rate(ubx_config_t *ubx, uint8_t rate) {
     else {
         baud = UBX_BAUD_38400;
     }
-    DLOG(TAG, "[%s] solutions:%hhu output rate: %"PRIu8", baud: %d", __FUNCTION__, ubx->rtc_conf->gnss_count, rate, baud);
+    FUNC_ENTRY_ARGSD(TAG, "solutions:%hhu output rate: %u, baud: %d", ubx->gnss_count, rate, baud);
     ret = ubx_cfg_valset(ubx, (const uint8_t[]){
         0x01, 0x00, 0x21, 0x30, output_vec[0], output_vec[1]
         }, 6, true);
@@ -659,7 +665,7 @@ static esp_err_t ubx_set_uart_out_rate(ubx_config_t *ubx, uint8_t rate) {
     return ret;
 }
 
-static esp_err_t ubx_set_gnss(ubx_config_t *ubx, uint8_t mode) {
+static esp_err_t ubx_set_gnss(ubx_ctx_t *ubx, uint8_t mode) {
     FUNC_ENTRY(TAG);
     uint8_t enable_gps = 0x01; // us gps
     uint8_t enable_sbas = 0x01; // us sbas
@@ -683,16 +689,12 @@ static esp_err_t ubx_set_gnss(ubx_config_t *ubx, uint8_t mode) {
     if(BIT_GET(mode, UBX_GNSS_GLONASS) != 0) {
         enable_glonass = 1;
     }
-    if(rtc_config.gnss_count < 1) {
-#if (C_LOG_LEVEL <= LOG_INFO_NUM)
+    if(ubx->gnss_count < 1) {
         ELOG(TAG, "[%s] count_solutions < 1, fallback to gps", __FUNCTION__);
-#endif
         enable_gps = 1;
     }
-    else if(rtc_config.gnss_count > 4) {
-#if (C_LOG_LEVEL <= LOG_INFO_NUM)
+    else if(ubx->gnss_count > 4) {
         ELOG(TAG, "[%s] count_solutions > 4, fallback to gps+galileo+glonass+beidou", __FUNCTION__);
-#endif
         enable_gps = 0x01;
         enable_galileo = 0x01;
         enable_glonass = 0x01;
@@ -721,7 +723,7 @@ static esp_err_t ubx_set_gnss(ubx_config_t *ubx, uint8_t mode) {
         memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
     }
     if(enable_beidou) {
-        if(rtc_config.hw_type <= UBX_TYPE_M9 || !enable_glonass) {
+        if(ubx->hw_type <= UBX_TYPE_M9 || !enable_glonass) {
             gnss_cmd[gnss_cursor++] = 0x0d; // enable beidou b1l
             memcpy(&gnss_cmd[gnss_cursor], tmp, 4), gnss_cursor += 4;
         }
@@ -756,12 +758,12 @@ static esp_err_t ubx_set_gnss(ubx_config_t *ubx, uint8_t mode) {
                     }, 8 * 6 + 4, true);
 }
 
-static esp_err_t ubx_set_msgout(ubx_config_t *ubx) {
+static esp_err_t ubx_set_msgout(ubx_ctx_t *ubx) {
     FUNC_ENTRY(TAG);
     esp_err_t ret = ESP_OK;
     uint8_t cfg_pvt_id = 0x07;
     uint8_t cfg_dop_id = 0x04;
-    if(ubx->rtc_conf->hw_type >= UBX_TYPE_M9){
+    if(ubx->hw_type >= UBX_TYPE_M9){
             cfg_pvt_id = 0x07;
             cfg_dop_id = 0x39;
     }
@@ -795,14 +797,14 @@ static esp_err_t ubx_set_msgout(ubx_config_t *ubx) {
     return ret;
 }
 
-static esp_err_t ubx_set_msgout_sat(ubx_config_t *ubx) {
+static esp_err_t ubx_set_msgout_sat(ubx_ctx_t *ubx) {
     FUNC_ENTRY(TAG);
     /* Send rate is relative to the event a message is registered on. 
     For example, if the rate of a navigation message is set to 2, 
     the message is sent every second navigation solution. 
     For configuring NMEA messages, the section NMEA Messages 
     Overview describes class and identifier numbers used. */
-    uint8_t cfg_rate = (((uint8_t)ubx->rtc_conf->output_rate) & 0xff);  // once in a second
+    uint8_t cfg_rate = (((uint8_t)g_rtc_config.ubx.output_rate) & 0xff);  // once in a second
     uint8_t cfg_sat_id = 0x16;
     esp_err_t ret =  ubx_cfg_valset(ubx, (const uint8_t[]){
                 /* sat id, cfg value */ cfg_sat_id, 0x00, 0x91, 0x20, cfg_rate                    
@@ -823,7 +825,7 @@ static esp_err_t ubx_set_msgout_sat(ubx_config_t *ubx) {
             }, 8, true);
 }
 
-static esp_err_t ubx_uart_save_cfg(ubx_config_t *ubx) {
+static esp_err_t ubx_uart_save_cfg(ubx_ctx_t *ubx) {
     FUNC_ENTRY(TAG);
     esp_err_t ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_CFG, (const uint8_t[]){
                 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00,
@@ -832,14 +834,12 @@ static esp_err_t ubx_uart_save_cfg(ubx_config_t *ubx) {
     return ret;
 }
 
-static esp_err_t ubx_uart_set_baud(ubx_config_t *ubx_dev) {
-    FUNC_ENTRY_ARGS(TAG, " %d", ubx_dev->rtc_conf->baud);
+static esp_err_t ubx_uart_set_baud(ubx_ctx_t *ubx_ctx) {
+    FUNC_ENTRY_ARGS(TAG, " %d", g_rtc_config.ubx.baud);
     esp_err_t ret = ESP_OK;
     delay_ms(10);
-    if(lock(1000))  {
-        ret = uart_set_baudrate(ubx_dev->uart_num, ubx_dev->rtc_conf->baud);
-        unlock();
-    }
+    // Note: Caller must already hold config_lock
+    ret = uart_set_baudrate(ubx_ctx->uart_num, g_rtc_config.ubx.baud);
 #if (C_LOG_LEVEL <= LOG_INFO_NUM)
     if (ret != ESP_OK) {
         ELOG(TAG, "[%s] uart_set_baudrate failed: %s", __FUNCTION__, esp_err_to_name(ret));
@@ -851,7 +851,7 @@ static esp_err_t ubx_uart_set_baud(ubx_config_t *ubx_dev) {
 
 // get routines //
 
-static esp_err_t ubx_get_hw_version(ubx_config_t *ubx) {
+static esp_err_t ubx_get_hw_version(ubx_ctx_t *ubx) {
     FUNC_ENTRY(TAG);
     uint8_t * msg = (uint8_t*)&ubx->ubx_msg.mon_ver, *p;
     ubx_msg_byte_ctx_t ubx_packet = UBX_MSG_BYTE_CTX_DEFAULT(ubx->ubx_msg);
@@ -878,11 +878,11 @@ static esp_err_t ubx_get_hw_version(ubx_config_t *ubx) {
         }
         FUNC_ENTRY_ARGS(TAG, "verext %d: [%s]", i, ver);
     }
-    ubx->rtc_conf->hw_type =*( msg + 34 + 3) == '8' ? UBX_TYPE_M8 : *( msg + 34 + 3) == '9' ? UBX_TYPE_M9 : *( msg + 34 + 3) == 'A' ? UBX_TYPE_M10 : UBX_TYPE_M0;
+    ubx->hw_type =*( msg + 34 + 3) == '8' ? UBX_TYPE_M8 : *( msg + 34 + 3) == '9' ? UBX_TYPE_M9 : *( msg + 34 + 3) == 'A' ? UBX_TYPE_M10 : UBX_TYPE_M0;
     return ESP_OK;
 }
 
-static esp_err_t ubx_get_hw_id(ubx_config_t *ubx) {
+static esp_err_t ubx_get_hw_id(ubx_ctx_t *ubx) {
     FUNC_ENTRY(TAG);
     uint8_t * msg = (uint8_t*)&ubx->ubx_msg.ubxId;
     ubx_msg_byte_ctx_t ubx_packet = UBX_MSG_BYTE_CTX_DEFAULT(ubx->ubx_msg);
@@ -892,7 +892,8 @@ static esp_err_t ubx_get_hw_id(ubx_config_t *ubx) {
     if(ret != ESP_OK) {
         return ret;
     }
-    memcpy(&(ubx->rtc_conf->hw_id[0]), msg+8, 6);
+    memcpy(&(ubx->hw_id[0]), msg+8, 6);
+    ubx->hw_id[6] = '\0';
 #if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
    for(int i=0; i<6; ++i) {
         DLOG(TAG, "hw id[%d]: [%"PRIu8"]", i, *(msg + 8 + i));
@@ -901,7 +902,7 @@ static esp_err_t ubx_get_hw_id(ubx_config_t *ubx) {
     return ESP_OK;
 }
 
-static esp_err_t ubx_get_gnss(ubx_config_t *ubx) {
+static esp_err_t ubx_get_gnss(ubx_ctx_t *ubx) {
     FUNC_ENTRY(TAG);
     uint8_t * msg = (uint8_t*)&ubx->ubx_msg.monGNSS;
     ubx_msg_byte_ctx_t ubx_packet = UBX_MSG_BYTE_CTX_DEFAULT(ubx->ubx_msg);
@@ -911,7 +912,7 @@ static esp_err_t ubx_get_gnss(ubx_config_t *ubx) {
     return ret;
 }
 
-static esp_err_t ubx_get_nav_sat(ubx_config_t *ubx) {
+static esp_err_t ubx_get_nav_sat(ubx_ctx_t *ubx) {
     FUNC_ENTRY(TAG);
     uint8_t *msg = (uint8_t*)&ubx->ubx_msg.nav_sat;
     ubx_msg_byte_ctx_t ubx_packet = UBX_MSG_BYTE_CTX_DEFAULT(ubx->ubx_msg);
@@ -921,12 +922,12 @@ static esp_err_t ubx_get_nav_sat(ubx_config_t *ubx) {
     return ret;
 }
 
-static esp_err_t ubx_try_baud(ubx_config_t *ubx, ubx_msg_byte_ctx_t * ubx_packet) {
+static esp_err_t ubx_try_baud(ubx_ctx_t *ubx, ubx_msg_byte_ctx_t * ubx_packet) {
     FUNC_ENTRY(TAG);
     esp_err_t ret = ESP_OK;
     uint32_t ubx_baud_rate_temp[6] = {0, 0, 0, 0, 0, 0};
     for(uint8_t i=0, j=lengthof(ubx_baud_rates), k; i<=j; ++i, k=0) {
-        ubx_baud_rate_temp[i] = ubx->rtc_conf->baud;
+        ubx_baud_rate_temp[i] = g_rtc_config.ubx.baud;
         if(i>0){
             if(!ubx_baud_rates[i-1])
                 goto next;
@@ -936,7 +937,7 @@ static esp_err_t ubx_try_baud(ubx_config_t *ubx, ubx_msg_byte_ctx_t * ubx_packet
                 }
                 ++k;
             }
-            ubx->rtc_conf->baud = ubx_baud_rates[i-1];
+            g_rtc_config.ubx.baud = ubx_baud_rates[i-1];
             ret = ubx_uart_set_baud(ubx);
 #if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
           if (ret != ESP_OK) {
@@ -945,7 +946,7 @@ static esp_err_t ubx_try_baud(ubx_config_t *ubx, ubx_msg_byte_ctx_t * ubx_packet
 #endif
             delay_ms(50);
         }
-        DLOG(TAG, "[%s] try read initial data with %d", __FUNCTION__, ubx->rtc_conf->baud);
+        FUNC_ENTRY_ARGSD(TAG, "[%s] try read initial data with %d", g_rtc_config.ubx.baud);
         memset(ubx_packet->msg, 0, ubx_packet->msg_size);
         //ubx_packet->ubx_msg = &ubx->ubx_msg;
         ret = read_ubx_msg(ubx, ubx_packet); // just fill the msg buffer to check if we can read ubx or nmea message
@@ -954,12 +955,12 @@ static esp_err_t ubx_try_baud(ubx_config_t *ubx, ubx_msg_byte_ctx_t * ubx_packet
         while(q<(ubx_packet->msg+ubx_packet->msg_size) && *q) {
             p = (char *)q;
             if(*q == UBX_HDR_A && *(q+1) == UBX_HDR_B) {
-                DLOG(TAG, "[%s] found UBX message at %d with baud: %d", __FUNCTION__, p-(char*)ubx_packet->msg, ubx->rtc_conf->baud);
+                FUNC_ENTRY_ARGSD(TAG, "[%s] found UBX message at %d with baud: %d", p-(char*)ubx_packet->msg, g_rtc_config.ubx.baud);
                 return ESP_OK;
                 break;
             }
             else if(*p == '$' && *(p+1) == 'G') {
-                DLOG(TAG, "[%s] found NMEA message at %d with baud: %d", __FUNCTION__, p-(char*)ubx_packet->msg, ubx->rtc_conf->baud);
+                FUNC_ENTRY_ARGSD(TAG, "[%s] found NMEA message at %d with baud: %d", p-(char*)ubx_packet->msg, g_rtc_config.ubx.baud);
                 return ESP_OK;
                 break;
             }
@@ -967,9 +968,7 @@ static esp_err_t ubx_try_baud(ubx_config_t *ubx, ubx_msg_byte_ctx_t * ubx_packet
         }
         
         if (ret != ESP_OK || !*(ubx_packet->msg+3)) {
-#if (C_LOG_LEVEL <= LOG_INFO_NUM)
-            WLOG(TAG, "[%s] %d failed: %s", __FUNCTION__, ubx->rtc_conf->baud, esp_err_to_name(ret));
-#endif
+            WLOG(TAG, "[%s] %d failed: %s", __FUNCTION__, g_rtc_config.ubx.baud, esp_err_to_name(ret));
             if(i<=j) {
                 continue;
             }
@@ -1001,7 +1000,7 @@ static void hex_string_to_uint8_t(const char* hex_string, uint8_t* output, size_
     }
 }
 
-static esp_err_t ubx_initial_read(ubx_config_t *ubx, bool get_hw) {
+static esp_err_t ubx_initial_read(ubx_ctx_t *ubx, bool get_hw) {
     FUNC_ENTRY(TAG);
     esp_err_t ret = ESP_OK;
     uint8_t msg[384] = {0};
@@ -1038,15 +1037,15 @@ static esp_err_t ubx_initial_read(ubx_config_t *ubx, bool get_hw) {
                 p+=2;
             else
                 goto find_space;
-            ubx->rtc_conf->hw_type = *p == '8' ? UBX_TYPE_M8 : *p == '9' ? UBX_TYPE_M9 : *p == 'A' ? UBX_TYPE_M10 : UBX_TYPE_M0;
+            ubx->hw_type = *p == '8' ? UBX_TYPE_M8 : *p == '9' ? UBX_TYPE_M9 : *p == 'A' ? UBX_TYPE_M10 : UBX_TYPE_M0;
         }
         
         if(p && (p = strstr(p, ",PROTVER="))) {
-            ubx->rtc_conf->prot_ver = (uint8_t) atoi(p+9);
+            ubx->prot_ver = (uint8_t) atoi(p+9);
         }
         if(p && (p = strstr(p, ",CHIPID="))) {
             p+=14;
-            hex_string_to_uint8_t(p, &(ubx->rtc_conf->hw_id[0]), 6);
+            hex_string_to_uint8_t(p, &(ubx->hw_id[0]), 6);
         }
     }
     FUNC_ENTRY_ARGS(TAG, " ok.");
@@ -1055,8 +1054,8 @@ static esp_err_t ubx_initial_read(ubx_config_t *ubx, bool get_hw) {
 
 // private functions
 
-const char * ubx_chip_str(const ubx_config_t *ubx) {
-    switch (ubx->rtc_conf->hw_type) {
+const char * ubx_chip_str(const ubx_ctx_t *ubx) {
+    switch (ubx->hw_type) {
         case UBX_TYPE_M7:
             return ubx_hw_type_strings[1];
         case UBX_TYPE_M8:
@@ -1070,8 +1069,8 @@ const char * ubx_chip_str(const ubx_config_t *ubx) {
     }
 }
 
-const char * ubx_baud_str(const ubx_config_t * ubx) {
-    switch (ubx->rtc_conf->baud) {
+const char * ubx_baud_str(const ubx_ctx_t * ubx) {
+    switch (g_rtc_config.ubx.baud) {
         case UBX_BAUD_9600:
             return ubx_baud_rate_strings[0];
         case UBX_BAUD_38400:

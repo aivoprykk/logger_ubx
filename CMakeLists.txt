@@ -5,7 +5,7 @@ idf_component_register(
     SRCS ${SRCS}
     INCLUDE_DIRS ${INCS}
     REQUIRES esp_event
-    PRIV_REQUIRES logger_common strutil
+    PRIV_REQUIRES logger_common strutil logger_config
 )
 
 if(NOT ${IDF_TARGET} STREQUAL "linux")

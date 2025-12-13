@@ -401,7 +401,7 @@ typedef struct ubx_msg_s {  // was union, but messages are overwritten by next m
 }
 
 struct ubx_msg_byte_ctx_s;
-struct ubx_config_s;
+struct ubx_ctx_s;
 
 typedef int (*ubx_msg_type_handler_cb)(struct ubx_msg_byte_ctx_s*);
 typedef int (*ubx_msg_ready_handler_cb)(struct ubx_msg_byte_ctx_s*);
@@ -433,7 +433,7 @@ typedef struct ubx_msg_byte_ctx_s {
 }
 
 
-int ubx_msg_handler(struct ubx_config_s *ubx_dev, ubx_msg_byte_ctx_t *);
+int ubx_msg_handler(struct ubx_ctx_s *ubx_dev, ubx_msg_byte_ctx_t *);
 int ubx_msg_type_handler(ubx_msg_byte_ctx_t *);
 int ubx_msg_checksum_handler(ubx_msg_byte_ctx_t *);
 int ubx_msg_byte_ctx_reset(ubx_msg_byte_ctx_t *);

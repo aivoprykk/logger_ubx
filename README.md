@@ -85,7 +85,7 @@ Configure via `idf.py menuconfig`:
 #include "ubx.h"
 
 // Create GPS configuration
-ubx_config_t *gps_config = ubx_config_new();
+ubx_ctx_t *gps_config = ubx_ctx_new();
 if (!gps_config) {
     ESP_LOGE(TAG, "Failed to create GPS config");
     return;
@@ -229,7 +229,7 @@ if (err == ESP_OK) {
 ## API Reference
 
 ### Core Functions
-- `ubx_config_new()` / `ubx_config_delete()`: Create/delete GPS configuration
+- `ubx_ctx_new()` / `ubx_ctx_delete()`: Create/delete GPS configuration
 - `ubx_on()` / `ubx_off()`: Power control
 - `ubx_setup()`: Initialize GPS with configuration
 - `ubx_set_nav_mode()`: Set navigation mode
@@ -300,7 +300,7 @@ if (err == ESP_OK) {
 ```c
 // Check GPS status
 ESP_LOGI(TAG, "GPS ready: %s", gps_config->ready ? "YES" : "NO");
-ESP_LOGI(TAG, "UART setup: %s", gps_config->uart_setup_ok ? "OK" : "FAIL");
+ESP_LOGI(TAG, "UART setup: %s", gps_config->uart_is_on ? "OK" : "FAIL");
 ESP_LOGI(TAG, "Chip type: %s", ubx_chip_str(gps_config));
 ESP_LOGI(TAG, "Baud rate: %s", ubx_baud_str(gps_config));
 

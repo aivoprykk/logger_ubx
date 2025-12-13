@@ -356,7 +356,7 @@ esp_err_t ubx_msg_checksum_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
     return ret;
 }
 
-esp_err_t ubx_msg_handler(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t *ubx_packet) {
+esp_err_t ubx_msg_handler(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t *ubx_packet) {
     ubx_msg_byte_ctx_reset(ubx_packet); // reset msg pointer and length to default
     esp_err_t err = read_ubx_msg(ubx_dev, ubx_packet);
     // if(err != ESP_OK) {
@@ -367,7 +367,7 @@ esp_err_t ubx_msg_handler(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t *ubx_packet)
 
 static const uint8_t ubx_msg_header[] = UBX_HDR;
 
-esp_err_t read_ubx_msg(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
+esp_err_t read_ubx_msg(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
     assert(ubx_packet);
     esp_err_t ret = ESP_OK;
     uint8_t got_header = 0;
@@ -387,6 +387,9 @@ esp_err_t read_ubx_msg(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
 //         if(len)
 //             printf(">>>>> len:%u >>>>>\n", len);
 // #endif
+        if (len == 0) {
+            taskYIELD(); // Yield to other tasks when no data available
+        }
         while (j<len) {
             if (!uart_read_bytes(ubx_dev->uart_num, &data, 1, 20 / portTICK_PERIOD_MS)) {
 #if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
@@ -471,7 +474,7 @@ esp_err_t read_ubx_msg(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
 #if (C_LOG_LEVEL == LOG_TRACE_NUM)
         print_ubx_msg(ubx_packet);
 #if LOG_MSG_BITS == 2
-    DLOG(TAG, "[%s] done read len:%u bytes, i:%"PRIu16" of msg size: %u used, {cls:%02x, id:%02x}", __FUNCTION__, len, i, ubx_packet->msg_size, *(ubx_packet->msg), *(ubx_packet->msg+1));
+    FUNC_ENTRY_ARGS(TAG, "done read len:%u bytes, i:%"PRIu16" of msg size: %u used, {cls:%02x, id:%02x}", len, i, ubx_packet->msg_size, *(ubx_packet->msg), *(ubx_packet->msg+1));
 #endif
 #endif
     //xSemaphoreGive(xMutex);
@@ -530,7 +533,7 @@ void print_ubx_msg(ubx_msg_byte_ctx_t * ubx_packet) {
 #endif
 }
 
-esp_err_t ack_status(ubx_config_t *ubx_dev, uint8_t cls_id, uint8_t msg_id) {
+esp_err_t ack_status(ubx_ctx_t *ubx_dev, uint8_t cls_id, uint8_t msg_id) {
     TLOG(TAG, "[%s]", __func__);
     esp_err_t ret = ESP_OK;
     ubx_dev->ubx_msg.navAck.msg_cls = cls_id;
@@ -582,11 +585,11 @@ esp_err_t write_ubx_msg(int uart_num, uint8_t *msg, size_t size, bool need_check
     return ret;
 }
 
-static esp_err_t ubx_cfg_send_m(ubx_config_t *ubx_dev, uint8_t * msg, size_t msg_len, bool need_ack) {
+static esp_err_t ubx_cfg_send_m(ubx_ctx_t *ubx_dev, uint8_t * msg, size_t msg_len, bool need_ack) {
     FUNC_ENTRYD(TAG);
     DMEAS_START();
     esp_err_t ret = ESP_OK;
-    if (lock(1000)) {
+    if (ubx_lock(500)) {
         ret = write_ubx_msg(ubx_dev->uart_num, msg, msg_len, true);
         if (ret != ESP_OK) {
             ELOG(TAG, "[%s] write_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
@@ -596,13 +599,13 @@ static esp_err_t ubx_cfg_send_m(ubx_config_t *ubx_dev, uint8_t * msg, size_t msg
         if(need_ack) 
             ret = ack_status(ubx_dev, *(msg+2), *(msg+3));
     done:
-       unlock();
+       ubx_unlock();
     }
     DMEAS_END(TAG);
     return ret;
 }
 
-esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx_dev, uint8_t cls, uint8_t id, const uint8_t * payload, size_t len, bool need_ack) {
+esp_err_t send_ubx_cfg_msg(ubx_ctx_t *ubx_dev, uint8_t cls, uint8_t id, const uint8_t * payload, size_t len, bool need_ack) {
     const uint8_t msgb[] = {UBX_HDR_A, UBX_HDR_B, cls, id, 0x00, 0x00, 0x00, 0x00};
     uint8_t *msg = 0;
     size_t msgb_len = sizeof(msgb), total_len = msgb_len + len;
@@ -624,9 +627,9 @@ esp_err_t send_ubx_cfg_msg(ubx_config_t *ubx_dev, uint8_t cls, uint8_t id, const
     return ret;
 }
 
-esp_err_t ubx_cfg_valset(ubx_config_t *ubx_dev, const uint8_t * payload, size_t len, bool need_ack) {
+esp_err_t ubx_cfg_valset(ubx_ctx_t *ubx_dev, const uint8_t * payload, size_t len, bool need_ack) {
     FUNC_ENTRYD(TAG);
-    if(rtc_config.hw_type < UBX_TYPE_M9)
+    if(ubx_dev->hw_type < UBX_TYPE_M9)
         return ESP_ERR_INVALID_ARG;
     uint8_t *msg = calloc(len+4, sizeof(uint8_t));
     memcpy(msg, (const uint8_t[]){0x01, 0x01, 0x00, 0x00}, 4);
@@ -636,16 +639,16 @@ esp_err_t ubx_cfg_valset(ubx_config_t *ubx_dev, const uint8_t * payload, size_t 
     return ret;
 }
 
-esp_err_t ubx_cfg_get(ubx_config_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
+esp_err_t ubx_cfg_get(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
     DMEAS_START();
     assert(ubx_packet && ubx_dev);
     esp_err_t ret = send_ubx_cfg_msg(ubx_dev, *ubx_packet->msg, *(ubx_packet->msg+1), NULL, 0, false);
-    if(lock(1000)) {
+    if(ubx_lock(500)) {
         ret = read_ubx_msg(ubx_dev, ubx_packet); // this msg is without ubx header as ubx_msg_t parts start with class and id
         if (ret != ESP_OK) {
             ELOG(TAG, "[%s] read_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
         }
-        unlock();
+        ubx_unlock();
     }
     DMEAS_END(TAG);
     return ret;
