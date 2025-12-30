@@ -9,26 +9,26 @@ extern "C" {
 
 #include <logger_common.h>
 
+#define UBX_EVENT_BASE 0x80  // Component ID 8
+
 // Declare an event base
 ESP_EVENT_DECLARE_BASE(UBX_EVENT);        // declaration of the UBX_EVENT family
-
+#define UBX_EVENT_ENUM(l) UBX_EVENT_##l,
 #define UBX_EVENT_LIST(l) \
-    l(UBX_EVENT_DATETIME_SET) \
-    l(UBX_EVENT_PINS_INIT_DONE) \
-    l(UBX_EVENT_PINS_INIT_FAIL) \
-    l(UBX_EVENT_UART_DEINIT_DONE) \
-    l(UBX_EVENT_UART_INIT_DONE) \
-    l(UBX_EVENT_UART_INIT_FAIL) \
-    l(UBX_EVENT_SETUP_DONE) \
-    l(UBX_EVENT_SETUP_FAIL) \
-    l(UBX_EVENT_MSG_RECIEVED) \
-    l(UBX_EVENT_SAMPLE_RATE_CHANGED) \
-    l(UBX_EVENT_CONFIG_CHANGED) \
-    l(UBX_EVENT_NAV_MODE_CHANGED) \
+    l(DATETIME_SET) \
+    l(UART_DEINIT_DONE) \
+    l(UART_INIT_DONE) \
+    l(UART_INIT_FAIL) \
+    l(SETUP_DONE) \
+    l(SETUP_FAIL) \
+    l(MSG_RECIEVED) \
+    l(SAMPLE_RATE_CHANGED) \
+    l(CONFIG_CHANGED) \
+    l(NAV_MODE_CHANGED)
 
 // declaration of the specific events under the UBX_EVENT family
 enum {                                       
-    UBX_EVENT_LIST(ENUM)
+    UBX_EVENT_LIST(UBX_EVENT_ENUM)
 };
 
  const char * ubx_event_strings(int id);

@@ -6,6 +6,7 @@
 #if defined(CONFIG_UBLOX_ENABLED)
 #include <sys/time.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "esp_err.h"
 
@@ -173,8 +174,6 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     ubx_packet->ubx_msg_type = MT_NAV_PVT;
                     ubx_packet->msg = (uint8_t *)&msg->navPvt;
                     ubx_packet->msg_size = sizeof(struct nav_pvt_s);
-                    // *ubx_packet->msg = CLS_NAV;
-                    // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 case NAV_DOP:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
@@ -183,8 +182,6 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     ubx_packet->ubx_msg_type = MT_NAV_DOP;
                     ubx_packet->msg = (uint8_t *)&msg->navDOP;
                     ubx_packet->msg_size = sizeof(struct nav_dop_s);
-                    // *ubx_packet->msg = CLS_NAV;
-                    // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 case NAV_SAT:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
@@ -193,8 +190,6 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     ubx_packet->ubx_msg_type = MT_NAV_SAT;
                     ubx_packet->msg = (uint8_t *)&msg->nav_sat;
                     ubx_packet->msg_size = sizeof(struct nav_sat_s);
-                    // *ubx_packet->msg = CLS_NAV;
-                    // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 default:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
@@ -213,8 +208,6 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     ubx_packet->ubx_msg_type = MT_MON_GNSS;
                     ubx_packet->msg = (uint8_t *)&msg->monGNSS;
                     ubx_packet->msg_size = sizeof(struct mon_gnss_s);
-                    // *ubx_packet->msg = CLS_NAV;
-                    // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 case MON_VER:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
@@ -223,8 +216,6 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     ubx_packet->ubx_msg_type = MT_MON_VER;
                     ubx_packet->msg = (uint8_t *)&msg->mon_ver;
                     ubx_packet->msg_size = sizeof(struct mon_ver_s);
-                    // *ubx_packet->msg = CLS_NAV;
-                    // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 default:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
@@ -243,8 +234,6 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     ubx_packet->ubx_msg_type = MT_NAV_ACK;
                     ubx_packet->msg = (uint8_t *)&msg->navAck;
                     ubx_packet->msg_size = sizeof(struct nav_ack_s);
-                    // *ubx_packet->msg = CLS_NAV;
-                    // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 case ACK_NAK:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
@@ -253,8 +242,6 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     ubx_packet->ubx_msg_type = MT_NAV_NACK;
                     ubx_packet->msg = (uint8_t *)&msg->navNack;
                     ubx_packet->msg_size = sizeof(struct nav_nack_s);
-                    // *ubx_packet->msg = CLS_NAV;
-                    // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 default:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
@@ -273,8 +260,6 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
                     ubx_packet->ubx_msg_type = MT_NAV_ID;
                     ubx_packet->msg = (uint8_t *)&msg->ubxId;
                     ubx_packet->msg_size = sizeof(struct nav_id_s);
-                    // *ubx_packet->msg = CLS_NAV;
-                    // *(ubx_packet->msg+1) = NAV_PVT;
                     break;
                 default:
 #if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
@@ -291,7 +276,12 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
             goto err;
             //break;
     }
-    ubx_packet->msg_len = ubx_packet->msg_size;
+    /* Preserve actual length set by reader (needed for variable-length frames like NAV-SAT). */
+    if (ubx_packet->msg_len == 0) {
+        ubx_packet->msg_len = ubx_packet->msg_size;
+    } else if (ubx_packet->msg_len > ubx_packet->msg_size) {
+        ubx_packet->msg_len = ubx_packet->msg_size;
+    }
     return ESP_OK;
     err:
     ubx_msg_byte_ctx_reset(ubx_packet);
@@ -330,6 +320,10 @@ esp_err_t msg_checksum_cb(ubx_msg_byte_ctx_t * ubx_packet) {
     }
 }
 
+#if (C_LOG_LEVEL <= LOG_INFO_NUM)
+const char * const ubx_msg_type_strings[] = { UBX_MSG_TYPE_LIST(STRINGIFY_V) };
+#endif
+
 esp_err_t ubx_msg_checksum_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
     esp_err_t ret = ESP_OK;
     if(!ubx_packet->msg) {
@@ -345,13 +339,19 @@ esp_err_t ubx_msg_checksum_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
         if(ubx_packet->ubx_msg_type == MT_NAV_PVT||ubx_packet->ubx_msg_type == MT_NAV_SAT||ubx_packet->ubx_msg_type== MT_NAV_DOP) {
             *(ubx_packet->msg+4) = *(ubx_packet->msg+5) = *(ubx_packet->msg+6) = *(ubx_packet->msg+7) = 0; // reset iTOW
 #if (C_LOG_LEVEL <= LOG_INFO_NUM)
-            ELOG(TAG,"[%s] fail, reset msg %hhu iTOW\n", __func__, ubx_packet->ubx_msg_type);
+            ELOG(TAG,"[%s] fail, reset msg %s iTOW", __func__,  ubx_msg_type_strings[ubx_packet->ubx_msg_type]);
 #endif
         }
         ubx_packet->ubx_msg_type = MT_NONE;
     }
     else {
         ubx_packet->ubx_msg->count_ok++;
+        if (ubx_packet->ctx) {
+            ubx_packet->ctx->last_valid_ms = get_millis();
+            if (ubx_packet->ctx->link_lost) {
+                ubx_packet->ctx->link_lost = false;
+            }
+        }
     }
     return ret;
 }
@@ -367,133 +367,154 @@ esp_err_t ubx_msg_handler(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t *ubx_packet) {
 
 static const uint8_t ubx_msg_header[] = UBX_HDR;
 
-esp_err_t read_ubx_msg(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
-    assert(ubx_packet);
+// Read exactly len bytes before deadline_ms; returns ESP_ERR_TIMEOUT on short read
+static esp_err_t _uart_read_exact(ubx_ctx_t *ubx_dev, uint8_t *dst, size_t len, uint32_t deadline_ms) {
+    uint32_t now = get_millis();
+    if (now >= deadline_ms) {
+        return ESP_ERR_TIMEOUT;
+    }
+    uint32_t remain_ms = deadline_ms - now;
+    
+    // Use event-driven buffer read
+    size_t got = ubx_rx_buf_read(ubx_dev, dst, len, remain_ms);
+    if (got < len) {
+        return ESP_ERR_TIMEOUT;
+    }
+    return ESP_OK;
+}
+
+// Read one UBX frame from the RX buffer; does resync and copies cls/id/len into msg buffer.
+static esp_err_t ubx_read_frame(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t *ubx_packet, uint32_t deadline) {
     esp_err_t ret = ESP_OK;
-    uint8_t got_header = 0;
-    uint8_t data = 0;
-    uint16_t i = 0, j = 0, timeout = MSG_READ_TIMEOUT, msg_len=ubx_packet->msg_size;
-    size_t len = 0;
-    uint32_t then = get_millis(), elapsed = 0;
-    assert(ubx_dev);
-    assert(ubx_packet->msg);
-    //xSemaphoreTake(xMutex, portMAX_DELAY);
-    while (i < msg_len && elapsed < timeout) {
-        j=0;
-        ret = uart_get_buffered_data_len(ubx_dev->uart_num, &len);
-        if (ret)
+
+    // 1) Read UBX header with resync: skip non-UBX bytes until we see 0xB5 0x62 or time out.
+    uint8_t header[2] = {0};
+    while (true) {
+        if (get_millis() >= deadline) {
+            return ESP_ERR_TIMEOUT;
+        }
+
+        size_t got = ubx_rx_buf_read(ubx_dev, &header[0], 1, deadline - get_millis());
+        if (got == 0) {
+            return ESP_ERR_TIMEOUT;
+        }
+        if (header[0] != ubx_msg_header[0]) {
+            continue;
+        }
+
+        if (get_millis() >= deadline) {
+            return ESP_ERR_TIMEOUT;
+        }
+        got = ubx_rx_buf_read(ubx_dev, &header[1], 1, deadline - get_millis());
+        if (got == 0) {
+            return ESP_ERR_TIMEOUT;
+        }
+        if (header[1] != ubx_msg_header[1]) {
+            continue;
+        }
+        break;
+    }
+
+    // 2) Read class, id, length (little-endian payload length)
+    uint8_t fixed[4] = {0};
+    ret = _uart_read_exact(ubx_dev, fixed, sizeof(fixed), deadline);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    uint16_t payload_len = 0;
+    decode_uint16(&fixed[2], &payload_len);
+    uint16_t total_len = payload_len + 6; // cls/id/len + payload + ckA/ckB (no UBX header)
+
+    // 3) Prepare buffer and possibly switch message target via handler
+    ubx_packet->msg_len = total_len;
+    uint8_t *msg = ubx_packet->msg;
+
+    if (ubx_packet->msg_size >= 4) {
+        msg[0] = fixed[0];
+        msg[1] = fixed[1];
+        msg[2] = fixed[2];
+        msg[3] = fixed[3];
+    }
+
+    if (ubx_packet->msg_type_handler) {
+        ret = ubx_packet->msg_type_handler(ubx_packet);
+        if (ret != ESP_OK) {
             return ret;
-// #if LOG_MSG_BITS == 2
-//         if(len)
-//             printf(">>>>> len:%u >>>>>\n", len);
-// #endif
-        if (len == 0) {
-            taskYIELD(); // Yield to other tasks when no data available
         }
-        while (j<len) {
-            if (!uart_read_bytes(ubx_dev->uart_num, &data, 1, 20 / portTICK_PERIOD_MS)) {
-#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
-                WLOG(TAG, "[%s] timeout, uart buffer full?", __FUNCTION__);
-#endif
-                return ESP_ERR_TIMEOUT;
-            }
-            if(got_header < 2 && ubx_packet->expect_ubx_msg){
-                if(data == ubx_msg_header[0]) { // check for UBX header
-                    got_header = 1;
-                }
-                else if(data == ubx_msg_header[1] && got_header==1){
-                    // reset i 
-                    i = (*(ubx_packet->msg+1) == ubx_msg_header[1] && *ubx_packet->msg == ubx_msg_header[0]) ? 2 : 0; // make sure we start fill msg after UBX header
-                    got_header = 2; // found UBX header
-                }
-                else {  
-                    got_header = 0; // reset if not matching
-                }
-                goto next_byte;
-            }
-            else if(ubx_packet->msg_match_to_pos && i<ubx_packet->msg_pos && data != *(ubx_packet->msg+i)) {
-                //DLOG(TAG, "[%s] msg match to pos failed i:%u msg_pos:%"PRIu16" data:%02x j:%"PRIu16, __FUNCTION__, i, ubx_packet->msg_pos, data, j);
-                i = 0; // reset if not matching
-                got_header = 0;
-                goto next_byte;
-            }
-            else if(i==ubx_packet->msg_pos && ubx_packet->msg_type_handler) {
-#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
-                if(ubx_packet->ubx_msg_type != MT_NONE) {
-                    WLOG(TAG, "[%s] msg type already set to: 0x%02x, it seems that previous msg not finished...", __FUNCTION__, ubx_packet->ubx_msg_type);
-                }
-#endif
-                ret = ubx_packet->msg_type_handler(ubx_packet);
-                if(ret != ESP_OK) { // set msg pointer and length point to right struct
-#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
-                    WLOG(TAG, "[%s] msg type handler failed", __FUNCTION__);
-#endif
-                    goto done;
-                }
-                else if(msg_len != ubx_packet->msg_size) {
-#if  LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
-                    TLOG(TAG, "[%s] msg pointer changed from ubx, change also msg_len: %"PRIu16" to msg_size_%"PRIu16, __FUNCTION__, msg_len, ubx_packet->msg_size);
-#endif
-                    msg_len = ubx_packet->msg_size;
-                }
-            }
-            if (data != *(ubx_packet->msg+i)) {
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
-                if(i<=ubx_packet->msg_pos)
-                    TLOG("[%s] msg match to pos i:%u j:%"PRIu16" msg_pos:%"PRIu16" data:0x%02x msg before:0x%02x", __FUNCTION__, i, j, ubx_packet->msg_pos, data, *(ubx_packet->msg+i));
-#endif
-                *(ubx_packet->msg+i) = data; // fill msg buffer
-            }
-            if(!ubx_packet->msg_match_to_pos && got_header == 2 && i == 3) { // check if msg buffer is full
-                decode_uint16(ubx_packet->msg+2, &msg_len); // set msg length
-#if LOG_MSG_BITS == 2 && (C_LOG_LEVEL == LOG_TRACE_NUM)
-                TLOG("[%s] got pl_len:%"PRIu16" from ubx, ubx_packet>msg_size:%"PRIu16", ubx_packet>msg_len:%"PRIu16" ubxlen:0x%02x 0x%02x", __FUNCTION__, msg_len, ubx_packet->msg_size, ubx_packet->msg_len, *(ubx_packet->msg+2), *(ubx_packet->msg+3));
-#endif
-                msg_len += 6; // add 6 bytes for UBX header and checksum
-                if(msg_len > ubx_packet->msg_size) {
-#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
-                    ELOG(TAG, "[%s] msg size too big: msg_len:%u msg_size:%u", __FUNCTION__, msg_len, ubx_packet->msg_size);
-#endif
-                }
-                else if(msg_len != ubx_packet->msg_size) {
-                    ubx_packet->msg_len = msg_len;
-                }
-            }
-            ++i;
-            if(i >= msg_len) // inner loop check if msg buffer is full
-                goto done;
-            next_byte:
-            ++j;
+        msg = ubx_packet->msg;
+        size_t copy_bytes = ubx_packet->msg_size < 4 ? ubx_packet->msg_size : 4;
+        if (copy_bytes) {
+            if (copy_bytes > 0) msg[0] = fixed[0];
+            if (copy_bytes > 1) msg[1] = fixed[1];
+            if (copy_bytes > 2) msg[2] = fixed[2];
+            if (copy_bytes > 3) msg[3] = fixed[3];
         }
-        elapsed = get_millis()-then;
     }
-    done:
-    if(ubx_packet->msg_ready_handler) {
-        ret = ubx_packet->msg_ready_handler(ubx_packet);
+
+    if (total_len > ubx_packet->msg_size) {
+        FUNC_ENTRY_ARGSD(TAG, "msg size too big: msg_len:%u msg_size:%u", total_len, ubx_packet->msg_size);
     }
+
+    // 4) Read remaining payload + checksum; copy into msg when space allows, discard overflow
+    uint16_t offset = 4;
+    uint16_t remaining = total_len > offset ? total_len - offset : 0;
+    uint8_t chunk[64];
+    while (remaining > 0) {
+        uint16_t chunk_len = remaining > sizeof(chunk) ? sizeof(chunk) : remaining;
+        ret = _uart_read_exact(ubx_dev, chunk, chunk_len, deadline);
+        if (ret != ESP_OK) {
+            return ret;
+        }
+        if (offset < ubx_packet->msg_size) {
+            uint16_t writable = ubx_packet->msg_size - offset;
+            uint16_t to_copy = chunk_len < writable ? chunk_len : writable;
+            memcpy(msg + offset, chunk, to_copy);
+        }
+        offset += chunk_len;
+        remaining -= chunk_len;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t read_ubx_msg(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
+    if(!ubx_packet) return ESP_ERR_INVALID_ARG;
+    if(!ubx_dev) return ESP_ERR_INVALID_ARG;
+    if(!ubx_packet->msg) return ESP_ERR_INVALID_ARG;
+
+    const uint16_t timeout = MSG_READ_TIMEOUT;
+    const uint32_t deadline = get_millis() + timeout;
+
+    // Sniff mode: when expect_ubx_msg==false we just harvest whatever is in the UART RX buffer
+    // without trying to parse UBX framing. This is needed during initial autobaud when the
+    // module may still output only NMEA; attempting to parse UBX length fields on NMEA bytes
+    // would produce bogus sizes and timeouts.
+    if (!ubx_packet->expect_ubx_msg) {
+        size_t got = ubx_rx_buf_read(ubx_dev, ubx_packet->msg, ubx_packet->msg_size, timeout);
+        ubx_packet->msg_len = (uint16_t)got;
+        return got ? ESP_OK : ESP_ERR_TIMEOUT;
+    }
+
+    while (true) {
+        esp_err_t ret = ubx_read_frame(ubx_dev, ubx_packet, deadline);
+        if (ret != ESP_OK) {
+            return ret;
+        }
+
+        if (ubx_packet->msg_ready_handler) {
+            ret = ubx_packet->msg_ready_handler(ubx_packet);
+            if (ret == ESP_ERR_INVALID_CRC || ret == ESP_ERR_NOT_SUPPORTED) {
+                continue; // Try to resync to the next frame within the same deadline
+            }
+        }
+
 #if (C_LOG_LEVEL == LOG_TRACE_NUM)
         print_ubx_msg(ubx_packet);
-#if LOG_MSG_BITS == 2
-    FUNC_ENTRY_ARGS(TAG, "done read len:%u bytes, i:%"PRIu16" of msg size: %u used, {cls:%02x, id:%02x}", len, i, ubx_packet->msg_size, *(ubx_packet->msg), *(ubx_packet->msg+1));
 #endif
-#endif
-    //xSemaphoreGive(xMutex);
-    if(ret == ESP_OK) {
-        if ((elapsed) >= timeout) {// timeout
-#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
-            WLOG(TAG, "[%s] timeout, elapsed: %"PRIu32, __FUNCTION__, elapsed);
-#endif
-            ret = ESP_ERR_TIMEOUT;
-        }
-        else if(!*(ubx_packet->msg+2)) {// no data
-#if (C_LOG_LEVEL <= LOG_DEBUG_NUM)
-            WLOG(TAG, "[%s] no data", __FUNCTION__);
-#endif
-            ret = ESP_ERR_INVALID_RESPONSE;
-        }
-    }
-    return ret;
 
+        return ret;
+    }
 }
 
 void print_ubx_msg(ubx_msg_byte_ctx_t * ubx_packet) {
@@ -534,7 +555,7 @@ void print_ubx_msg(ubx_msg_byte_ctx_t * ubx_packet) {
 }
 
 esp_err_t ack_status(ubx_ctx_t *ubx_dev, uint8_t cls_id, uint8_t msg_id) {
-    TLOG(TAG, "[%s]", __func__);
+    FUNC_ENTRYT(TAG);
     esp_err_t ret = ESP_OK;
     ubx_dev->ubx_msg.navAck.msg_cls = cls_id;
     ubx_dev->ubx_msg.navAck.msg_id = msg_id;
@@ -566,23 +587,17 @@ void add_checksum(uint8_t *message, uint16_t size, uint8_t *CK_A, uint8_t *CK_B)
 
 esp_err_t write_ubx_msg(int uart_num, uint8_t *msg, size_t size, bool need_checksum) {
     FUNC_ENTRYD(TAG);
-    esp_err_t ret = ESP_OK;
     if(need_checksum)
         add_checksum(msg, size, msg + size - 2, msg + size - 1);
 #if C_LOG_LEVEL == LOG_TRACE_NUM
-    DLOG(TAG, "[%s]: [ ", __func__);
+    FUNC_ENTRY_ARGSD(TAG, "[ ");
+    for(uint16_t i=0; i < size; ++i)
+        printf("0x%01x ", *(msg+i));
+    printf("] (%u)", size);
 #endif
-    for(uint16_t i=0; i < size; ++i){ // write the message byte by byte
-#if C_LOG_LEVEL == LOG_TRACE_NUM
-        DLOG(TAG, "0x%01x ", *(msg+i));
-#endif
-        if(uart_write_bytes(uart_num, msg+i, 1) != 1)
-            ret = ESP_FAIL;
-    }
-#if C_LOG_LEVEL == LOG_TRACE_NUM
-    DLOG(TAG, "] (%u)", size);
-#endif
-    return ret;
+    // Write entire message buffer at once for better I/O performance
+    int written = uart_write_bytes(uart_num, msg, size);
+    return (written == (int)size) ? ESP_OK : ESP_FAIL;
 }
 
 static esp_err_t ubx_cfg_send_m(ubx_ctx_t *ubx_dev, uint8_t * msg, size_t msg_len, bool need_ack) {

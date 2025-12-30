@@ -1,4 +1,4 @@
-SET(SRCS ubx.c ubx_msg_handler.c)
+SET(SRCS ubx.c ubx_msg_handler.c ubx_uart_event.c)
 SET(INCS include)
 
 idf_component_register(

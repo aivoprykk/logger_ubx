@@ -416,6 +416,7 @@ typedef struct ubx_msg_byte_ctx_s {
     uint8_t ubx_msg_type;
     ubx_msg_type_handler_cb msg_type_handler;
     ubx_msg_ready_handler_cb msg_ready_handler;
+    struct ubx_ctx_s *ctx;
     struct ubx_msg_s * ubx_msg;
 } ubx_msg_byte_ctx_t;
 
@@ -429,6 +430,7 @@ typedef struct ubx_msg_byte_ctx_s {
     .ubx_msg_type = 0,               \
     .msg_type_handler = ubx_msg_type_handler,        \
     .msg_ready_handler = NULL,       \
+    .ctx = NULL,                     \
     .ubx_msg = &(umsg),                     \
 }
 
@@ -437,6 +439,7 @@ int ubx_msg_handler(struct ubx_ctx_s *ubx_dev, ubx_msg_byte_ctx_t *);
 int ubx_msg_type_handler(ubx_msg_byte_ctx_t *);
 int ubx_msg_checksum_handler(ubx_msg_byte_ctx_t *);
 int ubx_msg_byte_ctx_reset(ubx_msg_byte_ctx_t *);
+bool ubx_rx_has_complete_frame(struct ubx_ctx_s *ctx);
 
 #ifdef __cplusplus
 }

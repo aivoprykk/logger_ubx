@@ -68,6 +68,18 @@ typedef struct ubx_ctx_s {
     uint8_t hw_id[8];
     uint8_t prot_ver;
     uint8_t gnss_count;
+    /// UART event-driven infrastructure
+    QueueHandle_t uart_event_queue;
+    TaskHandle_t uart_event_task;
+    uint8_t *rx_buffer;
+    size_t rx_buf_size;
+    size_t rx_buf_head;
+    size_t rx_buf_tail;
+    SemaphoreHandle_t rx_buf_mutex;
+    SemaphoreHandle_t msg_ready;  // Binary semaphore: signaled when message is ready
+    uint32_t last_rx_ms;
+    uint32_t last_valid_ms;
+    bool link_lost;
     /// state flags
     bool uart_is_on;
     bool setup_progress;
@@ -101,6 +113,16 @@ typedef struct ubx_ctx_s {
     .hw_id = {0,0,0,0,0,0},                           \
     .prot_ver = 0,                                   \
     .gnss_count = 0,                                 \
+    .uart_event_queue = NULL,                        \
+    .uart_event_task = NULL,                         \
+    .rx_buffer = NULL,                               \
+    .rx_buf_size = 0,                                \
+    .rx_buf_head = 0,                                \
+    .rx_buf_tail = 0,                                \
+    .rx_buf_mutex = NULL,                            \
+    .last_rx_ms = 0,                                 \
+    .last_valid_ms = 0,                              \
+    .link_lost = false,                              \
     .uart_is_on = false,                           \
     .setup_progress = false,                         \
     .initialized = false,                               \
@@ -173,7 +195,8 @@ int8_t ubx_set_time(ubx_ctx_t *ubx, float time_offset);
 
 esp_err_t ubx_setup(ubx_ctx_t *ubx);
 
-const char * ubx_chip_str(const ubx_ctx_t *ubx);
+// const char * ubx_chip_str(const ubx_ctx_t *ubx);
+const char * ubx_get_dev_str(void);
 
 const char * ubx_baud_str(const ubx_ctx_t *ubx);
 
