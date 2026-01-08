@@ -8,6 +8,72 @@ extern "C" {
 #endif
 
 #include <stdint.h>
+
+/*!< UBX Protocol headers */
+enum ubx_hdr_e {
+    UBX_HDR_A = 0xB5,
+    UBX_HDR_B = 0x62
+};
+
+#define UBX_HDR {UBX_HDR_A, UBX_HDR_B}
+
+// UBX Message Classes
+enum ubx_cls_e {
+    CLS_NONE = 0x00,
+    CLS_NAV = 0x01,
+    CLS_INF = 0x04,
+    CLS_ACK = 0x05,
+    CLS_CFG = 0x06,
+    CLS_LOG = 0x21,
+    CLS_SEC = 0x27,
+    CLS_MON = 0x0A
+};
+
+// ACK Message IDs
+enum ubx_ack_e {
+    ACK_ACK = 0x01,
+    ACK_NAK = 0x00
+};
+
+// NAV Message IDs
+enum ubx_nav_e {
+    NAV_POSLLH = 0x02,
+    NAV_STATUS = 0x03,
+    NAV_DOP = 0x04,
+    NAV_PVT = 0x07,
+    NAV_TIMEUTC = 0x01,
+    NAV_SVINFO = 0x30,
+    NAV_SAT = 0x35
+};
+#define NAV_SAT_LEN 1120
+
+// CFG Message IDs
+enum ubx_cfg_e {
+    CFG_PRT = 0x00,
+    CFG_MSG = 0x01,
+    CFG_RATE = 0x08,
+    CFG_CFG = 0x09,
+    CFG_NMEA = 0x17,
+    CFG_NAV5 = 0x24,
+    CFG_VALSET = 0x8a,
+    CFG_VALGET = 0x8b,
+    CFG_VALDEL = 0x8c,
+    CFG_GNSS = 0x3e
+};
+
+// MON Message IDs
+enum ubx_mon_e {
+    MON_VER = 0x04,
+    MON_HW = 0x09,
+    MON_GNSS = 0x28,
+    MON_MSGPP = 0x06,
+    MON_COMMS = 0x36
+};
+
+// SEC Message IDs
+enum ubx_sec_e {
+    SEC_UNIQID = 0x03
+};
 #include <stdbool.h>
 
 typedef struct __attribute__((packed)) nav_pvt_s {  // 92 bytes payload, with Beitian BN220 100 bytes total ????(0xB5,0x62,....,chkA,chkB

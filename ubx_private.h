@@ -29,74 +29,8 @@ void ubx_unlock();
 /*!< Timeout for the ubx message */
 #define MSG_READ_TIMEOUT 3000
 
-/*!< UBX Protocol headers */
-enum ubx_hdr_e {
-    UBX_HDR_A = 0xB5,
-    UBX_HDR_B = 0x62
-};
-
-#define UBX_HDR {UBX_HDR_A, UBX_HDR_B}
-
-/*!< UBX Message classes */
-enum ubx_cls_e {
-    CLS_NONE = 0x00,
-    CLS_NAV = 0x01,
-    CLS_INF = 0x04,
-    CLS_ACK = 0x05,
-    CLS_CFG = 0x06,
-    CLS_LOG = 0x21,
-    CLS_SEC = 0x27,
-    CLS_MON = 0x0A
-};
-
 /*!< None Message IDs */
 #define NONE_NONE 0x00
-
-/*!< ACK Message IDs */
-enum ubx_ack_e {
-    ACK_ACK = 0x01,
-    ACK_NAK = 0x00
-};
-
-/*!< NAV Message IDs */
-enum ubx_nav_e {
-    NAV_POSLLH = 0x02,
-    NAV_STATUS = 0x03,
-    NAV_DOP = 0x04,
-    NAV_PVT = 0x07,
-    NAV_TIMEUTC = 0x01,
-    NAV_SVINFO = 0x30,
-    NAV_SAT = 0x35
-};
-#define NAV_SAT_LEN 1120
-
-/*!< CFG Message IDs */
-enum ubx_cfg_e {
-    CFG_PRT = 0x00,
-    CFG_MSG = 0x01,
-    CFG_RATE = 0x08,
-    CFG_CFG = 0x09,
-    CFG_NMEA = 0x17,
-    CFG_NAV5 = 0x24,
-    CFG_VALSET = 0x8a,
-    CFG_VALGET = 0x8b,
-    CFG_VALDEL = 0x8c,
-    CFG_GNSS = 0x3e
-};
-
-/*!< MON Message IDs */
-enum ubx_mon_e {
-    MON_VER = 0x04,
-    MON_HW = 0x09,
-    MON_GNSS = 0x28,
-    MON_MSGPP = 0x06,
-    MON_COMMS = 0x36
-};
-
-/*!< SEC Message IDs */
-enum ubx_sec_e {
-    SEC_UNIQID = 0x03
-};
 
 struct ubx_ctx_s;
 struct ubx_msg_byte_ctx_s;
@@ -237,6 +171,11 @@ esp_err_t ubx_uart_event_init(struct ubx_ctx_s *ctx);
 esp_err_t ubx_uart_event_deinit(struct ubx_ctx_s *ctx);
 size_t ubx_rx_buf_read(struct ubx_ctx_s *ctx, uint8_t *dst, size_t len, uint32_t timeout_ms);
 
+// Circular buffer helpers (for testing)
+size_t ubx_rx_buf_available(struct ubx_ctx_s *ctx);
+size_t ubx_rx_buf_free_space(struct ubx_ctx_s *ctx);
+bool ubx_rx_has_complete_frame(struct ubx_ctx_s *ctx);
+
 #ifdef __cplusplus
 }
 #endif
@@ -260,5 +199,8 @@ inline esp_err_t encode_uint16(uint8_t *buf, uint16_t value) {
 inline void decode_uint16(const uint8_t* hex_string, uint16_t *output) {
     *output = (*(hex_string) + (*(hex_string+1) << 8));
 }
+
+/*!< Test runner function for UBX circular buffer tests */
+void run_ubx_circular_buffer_tests(void);
 
 #endif /* F77B6D3D_E33D_4ED3_B35C_5404E7A31138 */

@@ -1,0 +1,2 @@
+# Compiler options for example - less strict on warnings
+CONFIG_COMPILER_WARN_WRITE_STRINGS=n

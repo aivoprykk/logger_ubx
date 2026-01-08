@@ -31,13 +31,13 @@ const char * ubx_event_strings(int id) {return "UBX_EVENT";}
 
 SemaphoreHandle_t xMutex = NULL;
 #define TIMEOUT_MAX portMAX_DELAY
-static const TickType_t timeout_immediate = 0;
+// static const TickType_t timeout_immediate = 0;
 static ubx_ctx_t *ubx_ctx_global = NULL;
 
 // UBX config is now part of unified RTC config
 // Access via: g_rtc_config.ubx
 static const uint32_t ubx_baud_rates[] = {UBX_BAUD_RATE_LIST(NUMERIFY_V)};
-static const uint8_t ubx_hw_types[] = { UBX_TYPE_LIST(NUMERIFY_VV) };
+// static const uint8_t ubx_hw_types[] = { UBX_TYPE_LIST(NUMERIFY_VV) };
 static const char * const ubx_hw_type_strings[] = { UBX_TYPE_LIST(STRINGIFY_M) };
 static const char * const ubx_baud_rate_strings[] = { UBX_BAUD_RATE_LIST(STRINGIFY_L) };
 

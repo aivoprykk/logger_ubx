@@ -8,7 +8,7 @@
 
 static const char *TAG = "ubx_uart_event";
 
-#define UBX_RX_BUF_SIZE 4096  // Larger circular buffer to absorb bursts (4KB for 20Hz+ GPS)
+#define UBX_RX_BUF_SIZE 2048  // Larger circular buffer to absorb bursts (2KB for 20Hz+ GPS)
 #define UBX_UART_QUEUE_SIZE 20
 #define UBX_UART_TMP_BUF_SIZE 1024  // Temporary buffer for UART reads
 #define UBX_MSG_READY_DEPTH 32       // Counting semaphore depth for msg_ready
@@ -18,7 +18,7 @@ static const char *TAG = "ubx_uart_event";
 #define UBX_RX_BACKPRESSURE_PCT 75  // Flush when stale link and buffer exceeds this percent
 
 // Circular buffer helper: available bytes
-static inline size_t ubx_rx_buf_available(ubx_ctx_t *ctx) {
+inline size_t ubx_rx_buf_available(ubx_ctx_t *ctx) {
     if (ctx->rx_buf_head >= ctx->rx_buf_tail) {
         return ctx->rx_buf_head - ctx->rx_buf_tail;
     } else {
@@ -27,7 +27,7 @@ static inline size_t ubx_rx_buf_available(ubx_ctx_t *ctx) {
 }
 
 // Circular buffer helper: free space
-static inline size_t ubx_rx_buf_free_space(ubx_ctx_t *ctx) {
+inline size_t ubx_rx_buf_free_space(ubx_ctx_t *ctx) {
     return ctx->rx_buf_size - ubx_rx_buf_available(ctx) - 1;
 }
 
@@ -42,8 +42,11 @@ bool ubx_rx_has_complete_frame(ubx_ctx_t *ctx) {
     bool has = false;
     if (!ctx || !ctx->rx_buffer) return false;
 
+    // Minimal timeout for high-rate GPS (1-30Hz)
+    // At 30Hz (33ms period), even 1ms = 3% of budget
+    // False negative is safe - GPS task will retry next iteration
     if (xSemaphoreTake(ctx->rx_buf_mutex, pdMS_TO_TICKS(1)) != pdTRUE) {
-        return false;
+        return false;  // Conservative: assume no frame if can't quickly check
     }
 
     size_t avail = ubx_rx_buf_available(ctx);
@@ -188,9 +191,11 @@ static void ubx_uart_event_task(void *arg) {
                                 
                                 xSemaphoreGive(ctx->rx_buf_mutex);
 
-                                // Always wake consumer so it can resync/flush even when frames are incomplete
-                                bool has_frame = ubx_rx_has_complete_frame(ctx);
-                                if (ctx->msg_ready && (has_frame || used > 0)) {
+                                // Always signal consumer when data is written (even if frame check fails due to mutex)
+                                // GPS task will do its own frame check with proper mutex handling
+                                // This prevents deadlock where UART can't check frame (mutex busy) so doesn't signal,
+                                // but GPS is waiting for signal to check buffer
+                                if (ctx->msg_ready) {
                                     xSemaphoreGive(ctx->msg_ready);
                                 }
                             } else {
