@@ -41,7 +41,7 @@ static const uint32_t ubx_baud_rates[] = {UBX_BAUD_RATE_LIST(NUMERIFY_V)};
 static const char * const ubx_hw_type_strings[] = { UBX_TYPE_LIST(STRINGIFY_M) };
 static const char * const ubx_baud_rate_strings[] = { UBX_BAUD_RATE_LIST(STRINGIFY_L) };
 
-RTC_DATA_ATTR const char * ubx_dev_str = "UNKONOWN";
+RTC_DATA_ATTR const char * ubx_dev_str = "UNKNOWN";
 
 const char * ubx_get_dev_str(void) {
     return ubx_dev_str;
@@ -204,7 +204,7 @@ static esp_err_t ubx_uart_init(ubx_ctx_t *ubx_ctx) {
     }
     esp_err_t ret = ESP_OK;
 
-    if(config_lock(1000)) {
+    if(config_lock(500)) {
 
         ret = ubx_pins_init(ubx_ctx);
         if (ret != ESP_OK) {
@@ -259,7 +259,7 @@ static esp_err_t ubx_uart_init(ubx_ctx_t *ubx_ctx) {
 #endif
         config_unlock();
     }
-    delay_ms(100);
+    vTaskDelay(pdMS_TO_TICKS(100));
     return ret;
 }
 
@@ -440,7 +440,7 @@ int print_ubx_ctx_state(ubx_ctx_t *ubx_ctx) {
     printf("Ublox type: %s\n", ubx_ctx->Ublox_type);
     printf("HW type: %s (%d)\n", ubx_ctx->hw_type < sizeof(ubx_hw_type_strings)/sizeof(char*) ? ubx_hw_type_strings[ubx_ctx->hw_type] : "Unknown", ubx_ctx->hw_type);
     printf("HW id: %s\n", (char*)ubx_ctx->hw_id);
-    printf("Baud rate: %s (%d)\n", g_rtc_config.ubx.baud < sizeof(ubx_baud_rate_strings)/sizeof(char*) ? ubx_baud_rate_strings[g_rtc_config.ubx.baud] : "Unknown", g_rtc_config.ubx.baud);
+    printf("Baud rate: %s (%lu)\n", g_rtc_config.ubx.baud < sizeof(ubx_baud_rate_strings)/sizeof(char*) ? ubx_baud_rate_strings[g_rtc_config.ubx.baud] : "Unknown", g_rtc_config.ubx.baud);
     printf("GNSS: %"PRIu8" (count: %"PRIu8")\n", g_rtc_config.ubx.gnss, ubx_ctx->gnss_count);
     printf("Output rate: %"PRIu8" Hz\n", g_rtc_config.ubx.output_rate == 0 ? 0 : (uint8_t)(1000/HZ_TO_MS(g_rtc_config.ubx.output_rate)));
     printf("Nav mode: %d\n", g_rtc_config.ubx.nav_mode);
@@ -856,7 +856,7 @@ static esp_err_t ubx_uart_save_cfg(ubx_ctx_t *ubx) {
 }
 
 static esp_err_t ubx_uart_set_baud(ubx_ctx_t *ubx_ctx) {
-    FUNC_ENTRY_ARGS(TAG, " %d", g_rtc_config.ubx.baud);
+    FUNC_ENTRY_ARGS(TAG, " %lu", g_rtc_config.ubx.baud);
     esp_err_t ret = ESP_OK;
     delay_ms(10);
     // Note: Caller must already hold config_lock
@@ -973,21 +973,21 @@ static esp_err_t ubx_try_baud(ubx_ctx_t *ubx, ubx_msg_byte_ctx_t * ubx_packet) {
 #endif
             delay_ms(50);
         }
-        FUNC_ENTRY_ARGSD(TAG, "try read initial data with %d", g_rtc_config.ubx.baud);
+        FUNC_ENTRY_ARGSD(TAG, "try read initial data with %lu", g_rtc_config.ubx.baud);
         memset(ubx_packet->msg, 0, ubx_packet->msg_size);
         //ubx_packet->ubx_msg = &ubx->ubx_msg;
         ret = read_ubx_msg(ubx, ubx_packet); // just fill the msg buffer to check if we can read ubx or nmea message
         uint8_t * q = ubx_packet->msg;
         char * p = 0;
-        while(q<(ubx_packet->msg+ubx_packet->msg_size) && *q) {
+        while(q < (ubx_packet->msg + ubx_packet->msg_size) && *q) {
             p = (char *)q;
             if(*q == UBX_HDR_A && *(q+1) == UBX_HDR_B) {
-                FUNC_ENTRY_ARGSD(TAG, "found UBX message at %d with baud: %d", p-(char*)ubx_packet->msg, g_rtc_config.ubx.baud);
+                FUNC_ENTRY_ARGSD(TAG, "found UBX message at %d with baud: %lu", p-(char*)ubx_packet->msg, g_rtc_config.ubx.baud);
                 return ESP_OK;
                 break;
             }
             else if(*p == '$' && *(p+1) == 'G') {
-                FUNC_ENTRY_ARGSD(TAG, "found NMEA message at %d with baud: %d", p-(char*)ubx_packet->msg, g_rtc_config.ubx.baud);
+                FUNC_ENTRY_ARGSD(TAG, "found NMEA message at %d with baud: %lu", p-(char*)ubx_packet->msg, g_rtc_config.ubx.baud);
                 return ESP_OK;
                 break;
             }
@@ -995,7 +995,7 @@ static esp_err_t ubx_try_baud(ubx_ctx_t *ubx, ubx_msg_byte_ctx_t * ubx_packet) {
         }
         
         if (ret != ESP_OK || !*(ubx_packet->msg+3)) {
-            WLOG(TAG, "[%s] %d failed: %s", __FUNCTION__, g_rtc_config.ubx.baud, esp_err_to_name(ret));
+            WLOG(TAG, "[%s] %lu failed: %s", __FUNCTION__, g_rtc_config.ubx.baud, esp_err_to_name(ret));
             if(i<=j) {
                 continue;
             }

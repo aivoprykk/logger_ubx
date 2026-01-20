@@ -438,12 +438,7 @@ typedef struct ubx_msg_s {  // was union, but messages are overwritten by next m
     struct mon_gnss_s monGNSS;
     struct mon_ver_s mon_ver;
     struct nav_sat_s nav_sat;
-    uint32_t count_msg;
-    uint32_t count_err;
-    uint32_t count_ok;
-    uint32_t count_nav_pvt;
     uint32_t count_nav_sat;
-    uint32_t count_nav_pvt_prev;
     uint32_t count_nav_sat_prev;
 } ubx_msg_t;
 
@@ -457,12 +452,7 @@ typedef struct ubx_msg_s {  // was union, but messages are overwritten by next m
     .monGNSS = MON_GNSS_DEFAULT, \
     .mon_ver = MON_VER_DEFAULT, \
     .nav_sat = NAV_SAT_DEFAULT, \
-    .count_msg = 0, \
-    .count_err = 0, \
-    .count_ok = 0, \
-    .count_nav_pvt = 0, \
     .count_nav_sat = 0, \
-    .count_nav_pvt_prev = 0, \
     .count_nav_sat_prev = 0 \
 }
 
@@ -500,6 +490,23 @@ typedef struct ubx_msg_byte_ctx_s {
     .ubx_msg = &(umsg),                     \
 }
 
+typedef struct {
+    uint32_t count;
+    uint32_t count_ok;
+    uint32_t count_err;
+    uint32_t count_nav_pvt;
+    uint32_t count_nav_sat;
+    uint32_t count_nav_dop;
+} ubx_msg_stats_t;
+
+/*!< Print UBX protocol-level statistics (decoded messages with checksums) */
+void ubx_print_stats(uint32_t period_ms, uint8_t expected_hz);
+
+/*!< Print UART-level message statistics (headers found, message types) */
+void ubx_uart_print_stats(uint32_t period_ms, uint8_t expected_hz);
+
+/*!< Print UART circular buffer health statistics (usage, max/min) */
+void ubx_uart_print_buffer_stats(struct ubx_ctx_s *ctx);
 
 int ubx_msg_handler(struct ubx_ctx_s *ubx_dev, ubx_msg_byte_ctx_t *);
 int ubx_msg_type_handler(ubx_msg_byte_ctx_t *);

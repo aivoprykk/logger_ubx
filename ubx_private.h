@@ -20,6 +20,8 @@ extern "C" {
 #include "common_log.h"
 #include "unified_config.h"
 
+#define CONFIG_UBX_TIMER_STATS_ENABLED 1
+
 // #include "ubx.h"
 
 /*!< UBX module lock functions for UART operations */

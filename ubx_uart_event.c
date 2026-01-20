@@ -8,6 +8,12 @@
 
 static const char *TAG = "ubx_uart_event";
 
+#if defined(CONFIG_UBX_TIMER_STATS_ENABLED)
+// UART-level statistics: Track ALL UBX headers received from UART (before protocol decoding)
+static size_t rx_buf_used_max = 0;
+static size_t rx_buf_used_min = SIZE_MAX;
+#endif
+
 #define UBX_RX_BUF_SIZE 2048  // Larger circular buffer to absorb bursts (2KB for 20Hz+ GPS)
 #define UBX_UART_QUEUE_SIZE 20
 #define UBX_UART_TMP_BUF_SIZE 1024  // Temporary buffer for UART reads
@@ -180,6 +186,12 @@ static void ubx_uart_event_task(void *arg) {
                                 size_t used = ubx_rx_buf_available(ctx);
                                 size_t high_water = (ctx->rx_buf_size * UBX_RX_BACKPRESSURE_PCT) / 100;
 
+#if defined(CONFIG_UBX_TIMER_STATS_ENABLED)
+                                // Track buffer usage for stats
+                                if (used > rx_buf_used_max) rx_buf_used_max = used;
+                                if (used < rx_buf_used_min) rx_buf_used_min = used;
+#endif
+
                                 // If we have not seen a valid frame for a while and the buffer is filling, drop stale bytes
                                 if (ctx->last_valid_ms && used > high_water && (ctx->last_rx_ms - ctx->last_valid_ms) > UBX_LINK_LOSS_MS) {
                                     WLOG(TAG, "[%s] RX link stale, flushing buffer (used=%zu/%zu)", __FUNCTION__, used, ctx->rx_buf_size);
@@ -317,7 +329,7 @@ esp_err_t ubx_uart_event_deinit(ubx_ctx_t *ctx) {
         ctx->uart_num = -1;  // Signal task to exit
         
         // Wait for task to self-delete
-        uint32_t timeout = get_millis() + 2000;
+        uint32_t timeout = get_millis() + 1000;
         while (ctx->uart_event_task && get_millis() < timeout) {
             vTaskDelay(pdMS_TO_TICKS(10));
         }
@@ -354,5 +366,44 @@ esp_err_t ubx_uart_event_deinit(ubx_ctx_t *ctx) {
     ILOG(TAG, "[%s] Event-driven UART cleaned up", __FUNCTION__);
     return ESP_OK;
 }
+
+#if defined(CONFIG_UBX_TIMER_STATS_ENABLED)
+// Print circular buffer health statistics
+void ubx_uart_print_buffer_stats(ubx_ctx_t *ctx) {
+    if (!ctx) return;
+    
+    // Snapshot RX ring buffer usage (non-blocking if mutex busy)
+    size_t buf_size = ctx->rx_buf_size;
+    size_t buf_avail = 0;
+    size_t buf_free = 0;
+    if (ctx->rx_buf_mutex && xSemaphoreTake(ctx->rx_buf_mutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+        size_t head = ctx->rx_buf_head;
+        size_t tail = ctx->rx_buf_tail;
+        if (head >= tail) {
+            buf_avail = head - tail;
+        } else {
+            buf_avail = buf_size - tail + head;
+        }
+        buf_free = buf_size > 0 ? buf_size - buf_avail - 1 : 0;
+        
+        // Update tracking
+        if (buf_avail > rx_buf_used_max) rx_buf_used_max = buf_avail;
+        if (buf_avail < rx_buf_used_min) rx_buf_used_min = buf_avail;
+        
+        xSemaphoreGive(ctx->rx_buf_mutex);
+    }
+    float buf_used_pct = buf_size > 0 ? ((float)buf_avail * 100.0f) / (float)buf_size : 0.0f;
+    float buf_used_max_pct = buf_size > 0 ? ((float)rx_buf_used_max * 100.0f) / (float)buf_size : 0.0f;
+    
+    printf("[UART] ========== UART BUFFER STATS ===========\n");
+    printf("[UART] RX Buffer: size=%zu avail=%zu free=%zu used=%.1f%%\n",
+        buf_size, buf_avail, buf_free, buf_used_pct);
+    printf("[UART] Usage: max=%.1f%% min=%zu bytes\n",
+        buf_used_max_pct, rx_buf_used_min);
+    printf("[UART] ==========================================\n");
+}
+#else
+void ubx_uart_print_buffer_stats(ubx_ctx_t *ctx) {}
+#endif
 
 #endif // CONFIG_UBLOX_ENABLED

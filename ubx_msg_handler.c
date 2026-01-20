@@ -23,6 +23,20 @@
 
 static const char *TAG = "ubx_msg_handler";
 
+#if defined(CONFIG_UBX_TIMER_STATS_ENABLED)
+// UBX message statistics (module-private)
+static ubx_msg_stats_t cur_msg_stats = {0};
+static ubx_msg_stats_t prev_msg_stats = {0};
+static ubx_msg_stats_t period_msg_stats = {0};
+#endif
+
+#if defined(CONFIG_UBX_TIMER_STATS_ENABLED)
+// UART-level statistics: Track ALL UBX headers received from UART (before protocol decoding)
+static ubx_msg_stats_t uart_rx_stats = {0};
+static ubx_msg_stats_t uart_prev_stats = {0};
+#endif
+
+
 #if LOG_MSG_JSON == 1
 #include "strbf.h"
 #define json_obj_begin(msg) "{\"" msg "\":{ "
@@ -332,10 +346,14 @@ esp_err_t ubx_msg_checksum_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
 #endif
         return ESP_ERR_INVALID_ARG;
     }
-    ubx_packet->ubx_msg->count_msg++;
+#if defined(CONFIG_UBX_TIMER_STATS_ENABLED)
+    cur_msg_stats.count++;
+#endif
     ret = msg_checksum_cb(ubx_packet);
     if(ret != ESP_OK) {
-        ubx_packet->ubx_msg->count_err++;
+#if defined(CONFIG_UBX_TIMER_STATS_ENABLED)
+        cur_msg_stats.count_err++;
+#endif
         if(ubx_packet->ubx_msg_type == MT_NAV_PVT||ubx_packet->ubx_msg_type == MT_NAV_SAT||ubx_packet->ubx_msg_type== MT_NAV_DOP) {
             *(ubx_packet->msg+4) = *(ubx_packet->msg+5) = *(ubx_packet->msg+6) = *(ubx_packet->msg+7) = 0; // reset iTOW
 #if (C_LOG_LEVEL <= LOG_INFO_NUM)
@@ -345,7 +363,16 @@ esp_err_t ubx_msg_checksum_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
         ubx_packet->ubx_msg_type = MT_NONE;
     }
     else {
-        ubx_packet->ubx_msg->count_ok++;
+#if defined(CONFIG_UBX_TIMER_STATS_ENABLED)
+        cur_msg_stats.count_ok++;
+        // Track message types for comparison with GPS processing
+        switch(ubx_packet->ubx_msg_type) {
+            case MT_NAV_PVT: cur_msg_stats.count_nav_pvt++; break;
+            case MT_NAV_SAT: cur_msg_stats.count_nav_sat++; break;
+            case MT_NAV_DOP: cur_msg_stats.count_nav_dop++; break;
+            default: break;
+        }
+#endif
         if (ubx_packet->ctx) {
             ubx_packet->ctx->last_valid_ms = get_millis();
             if (ubx_packet->ctx->link_lost) {
@@ -421,6 +448,19 @@ static esp_err_t ubx_read_frame(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t *ubx_pack
     if (ret != ESP_OK) {
         return ret;
     }
+
+#if defined(CONFIG_UBX_TIMER_STATS_ENABLED)
+    // UART layer: count frame consumed from buffer (before checksum validation)
+    uart_rx_stats.count++;
+    // Track message types from class/id bytes
+    uint8_t cls = fixed[0];
+    uint8_t id = fixed[1];
+    if (cls == 0x01) {  // NAV class
+        if (id == 0x07) uart_rx_stats.count_nav_pvt++;       // NAV-PVT
+        else if (id == 0x35) uart_rx_stats.count_nav_sat++;  // NAV-SAT
+        else if (id == 0x04) uart_rx_stats.count_nav_dop++;  // NAV-DOP
+    }
+#endif
 
     uint16_t payload_len = 0;
     decode_uint16(&fixed[2], &payload_len);
@@ -668,6 +708,67 @@ esp_err_t ubx_cfg_get(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
     DMEAS_END(TAG);
     return ret;
 }
+#if defined(CONFIG_UBX_TIMER_STATS_ENABLED)
+// Print UART-level message statistics (message throughput and types)
+void ubx_uart_print_stats(uint32_t period_ms, uint8_t expected_hz) {
+    // Calculate period statistics
+    uint16_t period_count = uart_rx_stats.count - uart_prev_stats.count;
+    uint16_t period_nav_pvt = uart_rx_stats.count_nav_pvt - uart_prev_stats.count_nav_pvt;
+    uint16_t period_nav_sat = uart_rx_stats.count_nav_sat - uart_prev_stats.count_nav_sat;
+    uint16_t period_nav_dop = uart_rx_stats.count_nav_dop - uart_prev_stats.count_nav_dop;
+    
+    // Update previous snapshot
+    uart_prev_stats = uart_rx_stats;
+    
+    // Calculate throughput
+    float period_s = (float)period_ms / 1000.0f;
+    float throughput = period_s > 0.0f ? (float)period_count / period_s : 0.0f;
+    float expected_count = expected_hz*2+1;  // Total messages expected in this period
+    float loss_pct = expected_count > 0.0f ? (1.0f - throughput / expected_count) * 100.0f : 0.0f;
+    if (loss_pct < 0.0f) loss_pct = 0.0f;  // Clamp negative loss (happens when rate > expected)
+    
+    printf("[UART] ========== UART RX LAYER STATS ==========\n");
+    printf("[UART] Headers found (UART RX): %.1f msg/s (expected: %.1f msg/s at %hu Hz, loss: %.1f%%)\n",
+        throughput, expected_count, expected_hz, loss_pct);
+    printf("[UART] Message types (period): PVT=%" PRIu16 " SAT=%" PRIu16 " DOP=%" PRIu16 "\n",
+        period_nav_pvt, period_nav_sat, period_nav_dop);
+    printf("[UART] Totals: Headers=%" PRIu32 " PVT=%" PRIu32 " SAT=%" PRIu32 " DOP=%" PRIu32 "\n",
+        uart_rx_stats.count, uart_rx_stats.count_nav_pvt, uart_rx_stats.count_nav_sat, uart_rx_stats.count_nav_dop);
+    printf("[UART] ==========================================\n");
+}
 
+void ubx_print_stats(uint32_t period_ms, uint8_t expected_hz) {
+    // Calculate period stats (difference from previous snapshot)
+    period_msg_stats.count_err = cur_msg_stats.count_err - prev_msg_stats.count_err;
+    period_msg_stats.count = cur_msg_stats.count - prev_msg_stats.count;
+    period_msg_stats.count_nav_pvt = cur_msg_stats.count_nav_pvt - prev_msg_stats.count_nav_pvt;
+    period_msg_stats.count_nav_sat = cur_msg_stats.count_nav_sat - prev_msg_stats.count_nav_sat;
+    period_msg_stats.count_nav_dop = cur_msg_stats.count_nav_dop - prev_msg_stats.count_nav_dop;
+    
+    // Update previous snapshot
+    prev_msg_stats = cur_msg_stats;
+    
+    // Calculate throughput metrics
+    float period_s = (float)period_ms / 1000.0f;
+    float throughput = period_s > 0.0f ? (float)period_msg_stats.count / period_s : 0.0f;
+    float expected_count = expected_hz * 2 + 1; // Total messages expected in this period
+    float loss_pct = period_msg_stats.count > 0 ? (float)period_msg_stats.count_err * 100.0f / (float)period_msg_stats.count : 0.0f;
+
+    printf("[UBX] ========== UBX MODULE STATS ==========\n");
+    printf("[UART] Messages: %.1f msg/s (expected: %.1f msg/s at %hu Hz, loss: %.1f%%)\n",
+        throughput, expected_count, expected_hz, loss_pct);
+    printf("[UBX] RX Throughput: %.1f msg/s | Loss: %.1f%% (%"PRIu32" err / %"PRIu32" msg)\n",
+        throughput, loss_pct, period_msg_stats.count_err, period_msg_stats.count);
+    printf("[UBX] Message types (period): PVT=%"PRIu32" SAT=%"PRIu32" DOP=%"PRIu32"\n",
+        period_msg_stats.count_nav_pvt, period_msg_stats.count_nav_sat, period_msg_stats.count_nav_dop);
+    printf("[UBX] Totals: msg=%"PRIu32" ok=%"PRIu32" err=%"PRIu32" | PVT=%"PRIu32" SAT=%"PRIu32" DOP=%"PRIu32"\n",
+        cur_msg_stats.count, cur_msg_stats.count_ok, cur_msg_stats.count_err, 
+        cur_msg_stats.count_nav_pvt, cur_msg_stats.count_nav_sat, cur_msg_stats.count_nav_dop);
+    printf("[UBX] ==========================================\n");
+}
+#else
+void ubx_uart_print_stats(uint32_t period_ms, uint8_t expected_hz) {}
+void ubx_print_stats(uint32_t period_ms, uint8_t expected_hz) {}
+#endif
 
 #endif
