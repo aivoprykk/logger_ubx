@@ -1,6 +1,6 @@
 
 #include "ubx.h"
-#include "ubx_events.h"
+// #include "ubx_events.h"
 #include "ubx_msg.h"
 
 #if defined(CONFIG_UBLOX_ENABLED)
@@ -171,12 +171,12 @@ esp_err_t ubx_msg_serialize_json(ubx_msg_byte_ctx_t * ubx_packet, strbf_t * msgb
 #endif
 
 esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
-    assert(ubx_packet);
+    // assert(ubx_packet);
     if(!ubx_packet->msg) {
         WLOG(TAG, "msg is NULL, can not handle message.");
         return ESP_ERR_INVALID_ARG;
     }
-    assert(ubx_packet->ubx_msg);
+    // assert(ubx_packet->ubx_msg);
     ubx_msg_t *msg = ubx_packet->ubx_msg;
      switch (*ubx_packet->msg) {
         case CLS_NAV:
@@ -303,7 +303,7 @@ esp_err_t ubx_msg_type_handler(struct ubx_msg_byte_ctx_s * ubx_packet) {
 }
 
 esp_err_t ubx_msg_byte_ctx_reset(ubx_msg_byte_ctx_t * ubx_packet) {
-    assert(ubx_packet);
+    // assert(ubx_packet);
     if(ubx_packet->ubx_msg_type!= MT_NONE)
         ubx_packet->ubx_msg_type = MT_NONE;
     ubx_packet->msg = &ubx_packet->ubx_msg->none[0];
@@ -672,7 +672,7 @@ esp_err_t send_ubx_cfg_msg(ubx_ctx_t *ubx_dev, uint8_t cls, uint8_t id, const ui
     }
     else
         msg = (uint8_t*)&(msgb[0]); // no payload
-    assert(msg);
+    // assert(msg);
     esp_err_t ret = ubx_cfg_send_m(ubx_dev, msg, total_len, need_ack);
     if (ret != ESP_OK) {
         ELOG(TAG, "[%s] failed: %s", __FUNCTION__, esp_err_to_name(ret));
@@ -696,7 +696,7 @@ esp_err_t ubx_cfg_valset(ubx_ctx_t *ubx_dev, const uint8_t * payload, size_t len
 
 esp_err_t ubx_cfg_get(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
     DMEAS_START();
-    assert(ubx_packet && ubx_dev);
+    // assert(ubx_packet && ubx_dev);
     esp_err_t ret = send_ubx_cfg_msg(ubx_dev, *ubx_packet->msg, *(ubx_packet->msg+1), NULL, 0, false);
     if(ubx_lock(500)) {
         ret = read_ubx_msg(ubx_dev, ubx_packet); // this msg is without ubx header as ubx_msg_t parts start with class and id
@@ -728,7 +728,7 @@ void ubx_uart_print_stats(uint32_t period_ms, uint8_t expected_hz) {
     if (loss_pct < 0.0f) loss_pct = 0.0f;  // Clamp negative loss (happens when rate > expected)
     
     printf("[UART] ========== UART RX LAYER STATS ==========\n");
-    printf("[UART] Headers found (UART RX): %.1f msg/s (expected: %.1f msg/s at %hu Hz, loss: %.1f%%)\n",
+    printf("[UART] Headers found (UART RX): %.1f msg/s (expected: %.1f msg/s at %" PRIu16 " Hz, loss: %.1f%%)\n",
         throughput, expected_count, expected_hz, loss_pct);
     printf("[UART] Message types (period): PVT=%" PRIu16 " SAT=%" PRIu16 " DOP=%" PRIu16 "\n",
         period_nav_pvt, period_nav_sat, period_nav_dop);
@@ -755,7 +755,7 @@ void ubx_print_stats(uint32_t period_ms, uint8_t expected_hz) {
     float loss_pct = period_msg_stats.count > 0 ? (float)period_msg_stats.count_err * 100.0f / (float)period_msg_stats.count : 0.0f;
 
     printf("[UBX] ========== UBX MODULE STATS ==========\n");
-    printf("[UART] Messages: %.1f msg/s (expected: %.1f msg/s at %hu Hz, loss: %.1f%%)\n",
+    printf("[UART] Messages: %.1f msg/s (expected: %.1f msg/s at %" PRIu16 " Hz, loss: %.1f%%)\n",
         throughput, expected_count, expected_hz, loss_pct);
     printf("[UBX] RX Throughput: %.1f msg/s | Loss: %.1f%% (%"PRIu32" err / %"PRIu32" msg)\n",
         throughput, loss_pct, period_msg_stats.count_err, period_msg_stats.count);
