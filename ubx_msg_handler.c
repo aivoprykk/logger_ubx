@@ -401,7 +401,7 @@ static esp_err_t _uart_read_exact(ubx_ctx_t *ubx_dev, uint8_t *dst, size_t len, 
         return ESP_ERR_TIMEOUT;
     }
     uint32_t remain_ms = deadline_ms - now;
-    
+
     // Use event-driven buffer read
     size_t got = ubx_rx_buf_read(ubx_dev, dst, len, remain_ms);
     if (got < len) {
@@ -716,17 +716,17 @@ void ubx_uart_print_stats(uint32_t period_ms, uint8_t expected_hz) {
     uint16_t period_nav_pvt = uart_rx_stats.count_nav_pvt - uart_prev_stats.count_nav_pvt;
     uint16_t period_nav_sat = uart_rx_stats.count_nav_sat - uart_prev_stats.count_nav_sat;
     uint16_t period_nav_dop = uart_rx_stats.count_nav_dop - uart_prev_stats.count_nav_dop;
-    
+
     // Update previous snapshot
     uart_prev_stats = uart_rx_stats;
-    
+
     // Calculate throughput
     float period_s = (float)period_ms / 1000.0f;
     float throughput = period_s > 0.0f ? (float)period_count / period_s : 0.0f;
     float expected_count = expected_hz*2+1;  // Total messages expected in this period
     float loss_pct = expected_count > 0.0f ? (1.0f - throughput / expected_count) * 100.0f : 0.0f;
     if (loss_pct < 0.0f) loss_pct = 0.0f;  // Clamp negative loss (happens when rate > expected)
-    
+
     printf("[UART] ========== UART RX LAYER STATS ==========\n");
     printf("[UART] Headers found (UART RX): %.1f msg/s (expected: %.1f msg/s at %" PRIu16 " Hz, loss: %.1f%%)\n",
         throughput, expected_count, expected_hz, loss_pct);
@@ -744,10 +744,10 @@ void ubx_print_stats(uint32_t period_ms, uint8_t expected_hz) {
     period_msg_stats.count_nav_pvt = cur_msg_stats.count_nav_pvt - prev_msg_stats.count_nav_pvt;
     period_msg_stats.count_nav_sat = cur_msg_stats.count_nav_sat - prev_msg_stats.count_nav_sat;
     period_msg_stats.count_nav_dop = cur_msg_stats.count_nav_dop - prev_msg_stats.count_nav_dop;
-    
+
     // Update previous snapshot
     prev_msg_stats = cur_msg_stats;
-    
+
     // Calculate throughput metrics
     float period_s = (float)period_ms / 1000.0f;
     float throughput = period_s > 0.0f ? (float)period_msg_stats.count / period_s : 0.0f;

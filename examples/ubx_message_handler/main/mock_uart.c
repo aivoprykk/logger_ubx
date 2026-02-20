@@ -168,33 +168,33 @@ int mock_uart_generate_data(uint8_t *buffer, size_t max_len) {
     if (!buffer || max_len == 0) {
         return 0;
     }
-    
+
     int64_t current_time = esp_timer_get_time() / 1000; // Convert to ms
-    
+
     // Generate data at configured interval
     if (current_time - last_generation_time < MOCK_DATA_INTERVAL_MS) {
         return 0;
     }
-    
+
     last_generation_time = current_time;
-    
+
     // Get next message from sequence
     const ubx_sample_msg_t *msg = &sample_messages[current_msg_index];
-    
+
     if (msg->len > max_len) {
         ESP_LOGW(TAG, "Buffer too small for message %s", msg->description);
         return 0;
     }
-    
+
     // Copy message to buffer
     memcpy(buffer, msg->data, msg->len);
-    
+
     // Silent mode for stress testing - no logging
     // ESP_LOGI(TAG, "Generated mock message: %s (%d bytes)", msg->description, msg->len);
-    
+
     // Move to next message (cycle through)
     current_msg_index = (current_msg_index + 1) % num_sample_messages;
-    
+
     return (int)msg->len;
 }
 

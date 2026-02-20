@@ -10,10 +10,10 @@
 #include "ubx_private.h"
 
 #if defined(CONFIG_UBLOX_ENABLED)
-#include "config.h"
+#include "config_observer.h"
+#include "config_lock.h"
 #include "ubx.h"
 #include <driver/gpio.h>
-#include <esp_log.h>
 #include <sys/time.h>
 
 static const char *TAG = "ublox";
@@ -236,7 +236,7 @@ static esp_err_t ubx_uart_init(ubx_ctx_t *ubx_ctx) {
 				goto done;
 			}
 		} else {
-			ESP_LOGW(TAG, "[%s] uart_set_pin failed", __FUNCTION__);
+			WLOG(TAG, "[%s] uart_set_pin failed", __FUNCTION__);
 			goto done;
 		}
 		int intr_alloc_flags = 0;

@@ -29,7 +29,7 @@ void setUp(void) {
     memset(&test_ctx, 0, sizeof(ubx_ctx_t));
     memset(&test_msg, 0, sizeof(ubx_msg_t));
     memset(test_rx_buffer, 0, sizeof(test_rx_buffer));
-    
+
     test_ctx.rx_buffer = test_rx_buffer;
     test_ctx.rx_buf_size = sizeof(test_rx_buffer);
     test_ctx.rx_buf_mutex = xSemaphoreCreateMutex();
@@ -49,9 +49,9 @@ TEST_CASE("Message handler - checksum calculation ACK-ACK", "[ubx][msg_handler]"
     // ACK-ACK message: cls=05, id=01, len=02, payload=06 01
     uint8_t msg[] = {0x05, 0x01, 0x02, 0x00, 0x06, 0x01, 0x00, 0x00};
     uint8_t CK_A = 0, CK_B = 0;
-    
+
     add_checksum(msg, 8, &CK_A, &CK_B);
-    
+
     // Calculated checksum for: 05 01 02 00 06 01
     // CK_A = 05+01+02+00+06+01 = 0F
     // CK_B = 05+(05+01)+(05+01+02)+(05+01+02+00)+(05+01+02+00+06)+(05+01+02+00+06+01) = 0F+06+08+08+0E+0F = 52
@@ -67,9 +67,9 @@ TEST_CASE("Message handler - checksum with UBX header", "[ubx][msg_handler]")
     // Full UBX message with header: B5 62 05 01 02 00 06 01 CK_A CK_B
     uint8_t msg[] = {0xB5, 0x62, 0x05, 0x01, 0x02, 0x00, 0x06, 0x01, 0x00, 0x00};
     uint8_t CK_A = 0, CK_B = 0;
-    
+
     add_checksum(msg, 10, &CK_A, &CK_B);
-    
+
     // Should skip header (B5 62) and calculate from byte 2 onwards
     TEST_ASSERT_EQUAL_HEX8(0x0F, CK_A);
     TEST_ASSERT_EQUAL_HEX8(0x52, CK_B);
@@ -87,7 +87,7 @@ TEST_CASE("Message handler - checksum validation valid", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NAV_ACK
     };
-    
+
     esp_err_t ret = msg_checksum_cb(&packet);
     TEST_ASSERT_EQUAL(ESP_OK, ret);
 }
@@ -104,7 +104,7 @@ TEST_CASE("Message handler - checksum validation invalid", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NAV_ACK
     };
-    
+
     esp_err_t ret = msg_checksum_cb(&packet);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_CRC, ret);
 }
@@ -121,9 +121,9 @@ TEST_CASE("Message handler - NAV-PVT type identification", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_NAV_PVT, packet.ubx_msg_type);
     TEST_ASSERT_EQUAL(sizeof(nav_pvt_t), packet.msg_size);
@@ -141,9 +141,9 @@ TEST_CASE("Message handler - NAV-DOP type identification", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_NAV_DOP, packet.ubx_msg_type);
 }
@@ -160,9 +160,9 @@ TEST_CASE("Message handler - NAV-SAT type identification", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_NAV_SAT, packet.ubx_msg_type);
 }
@@ -179,9 +179,9 @@ TEST_CASE("Message handler - ACK-ACK type identification", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_NAV_ACK, packet.ubx_msg_type);
 }
@@ -198,9 +198,9 @@ TEST_CASE("Message handler - ACK-NAK type identification", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_NAV_NACK, packet.ubx_msg_type);
 }
@@ -217,9 +217,9 @@ TEST_CASE("Message handler - MON-VER type identification", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_MON_VER, packet.ubx_msg_type);
 }
@@ -236,9 +236,9 @@ TEST_CASE("Message handler - MON-GNSS type identification", "[ubx][msg_handler]"
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_MON_GNSS, packet.ubx_msg_type);
 }
@@ -255,9 +255,9 @@ TEST_CASE("Message handler - SEC-UNIQID type identification", "[ubx][msg_handler
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_NAV_ID, packet.ubx_msg_type);
 }
@@ -274,9 +274,9 @@ TEST_CASE("Message handler - unknown message class", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_ERR_NOT_SUPPORTED, ret);
     TEST_ASSERT_EQUAL(MT_NONE, packet.ubx_msg_type);
 }
@@ -293,9 +293,9 @@ TEST_CASE("Message handler - unknown NAV message ID", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_ERR_NOT_SUPPORTED, ret);
 }
 
@@ -310,16 +310,16 @@ TEST_CASE("Message handler - context reset", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NAV_PVT
     };
-    
+
     // Fill with non-zero
     memset(packet.msg, 0xAA, 16);
-    
+
     esp_err_t ret = ubx_msg_byte_ctx_reset(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_NONE, packet.ubx_msg_type);
     TEST_ASSERT_EQUAL(UBX_NONE_SIZE, packet.msg_size);
-    
+
     // Verify zeroed
     for (int i = 0; i < UBX_NONE_SIZE; i++) {
         TEST_ASSERT_EQUAL(0, packet.msg[i]);
@@ -334,7 +334,7 @@ TEST_CASE("Message handler - checksum handler counter updates", "[ubx][msg_handl
     test_msg.count_msg = 5;
     test_msg.count_ok = 3;
     test_msg.count_err = 2;
-    
+
     // Valid checksum
     uint8_t msg_valid[] = {0x05, 0x01, 0x02, 0x00, 0x06, 0x01, 0x0F, 0x52};
     ubx_msg_byte_ctx_t packet = {
@@ -345,9 +345,9 @@ TEST_CASE("Message handler - checksum handler counter updates", "[ubx][msg_handl
         .ubx_msg_type = MT_NAV_ACK,
         .ctx = &test_ctx
     };
-    
+
     esp_err_t ret = ubx_msg_checksum_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(6, test_msg.count_msg);
     TEST_ASSERT_EQUAL(4, test_msg.count_ok);
@@ -362,7 +362,7 @@ TEST_CASE("Message handler - checksum handler error counter", "[ubx][msg_handler
     test_msg.count_msg = 5;
     test_msg.count_ok = 3;
     test_msg.count_err = 2;
-    
+
     // Invalid checksum
     uint8_t msg_invalid[] = {0x05, 0x01, 0x02, 0x00, 0x06, 0x01, 0xFF, 0xFF};
     ubx_msg_byte_ctx_t packet = {
@@ -373,9 +373,9 @@ TEST_CASE("Message handler - checksum handler error counter", "[ubx][msg_handler
         .ubx_msg_type = MT_NAV_ACK,
         .ctx = &test_ctx
     };
-    
+
     esp_err_t ret = ubx_msg_checksum_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_CRC, ret);
     TEST_ASSERT_EQUAL(6, test_msg.count_msg);
     TEST_ASSERT_EQUAL(3, test_msg.count_ok);
@@ -390,7 +390,7 @@ TEST_CASE("Message handler - checksum handler link status update", "[ubx][msg_ha
 {
     test_ctx.link_lost = true;
     test_ctx.last_valid_ms = 0;
-    
+
     uint8_t msg_valid[] = {0x05, 0x01, 0x02, 0x00, 0x06, 0x01, 0x0F, 0x52};
     ubx_msg_byte_ctx_t packet = {
         .msg = msg_valid,
@@ -400,9 +400,9 @@ TEST_CASE("Message handler - checksum handler link status update", "[ubx][msg_ha
         .ubx_msg_type = MT_NAV_ACK,
         .ctx = &test_ctx
     };
-    
+
     esp_err_t ret = ubx_msg_checksum_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_FALSE(test_ctx.link_lost);
     TEST_ASSERT_NOT_EQUAL(0, test_ctx.last_valid_ms);
@@ -416,18 +416,18 @@ TEST_CASE("Message handler - write message with checksum", "[ubx][msg_handler]")
     // We can't easily test actual UART writing without hardware, but we can
     // verify checksum is added correctly
     uint8_t msg[] = {0xB5, 0x62, 0x05, 0x01, 0x02, 0x00, 0x06, 0x01, 0x00, 0x00};
-    
+
     // Mock: just verify checksum gets computed
     uint8_t CK_A = 0, CK_B = 0;
     add_checksum(msg, sizeof(msg), &CK_A, &CK_B);
-    
+
     TEST_ASSERT_EQUAL_HEX8(0x0F, CK_A);
     TEST_ASSERT_EQUAL_HEX8(0x52, CK_B);
-    
+
     // After write_ubx_msg with need_checksum=true, last two bytes should be updated
     msg[8] = CK_A;
     msg[9] = CK_B;
-    
+
     TEST_ASSERT_EQUAL_HEX8(0x0F, msg[8]);
     TEST_ASSERT_EQUAL_HEX8(0x52, msg[9]);
 }
@@ -446,7 +446,7 @@ TEST_CASE("Message handler - variable length NAV-SAT", "[ubx][msg_handler]")
         0x02,              // numSvs
         0x00, 0x00         // reserved
     };
-    
+
     ubx_msg_byte_ctx_t packet = {
         .msg = msg_data,
         .msg_size = 200,
@@ -454,9 +454,9 @@ TEST_CASE("Message handler - variable length NAV-SAT", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_NAV_SAT, packet.ubx_msg_type);
     // msg_len should be preserved for variable-length message
@@ -471,7 +471,7 @@ TEST_CASE("Message handler - null pointer safety", "[ubx][msg_handler]")
     // Null packet in checksum
     esp_err_t ret = msg_checksum_cb(NULL);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
-    
+
     // Null msg in packet
     ubx_msg_byte_ctx_t packet = {
         .msg = NULL,
@@ -479,11 +479,11 @@ TEST_CASE("Message handler - null pointer safety", "[ubx][msg_handler]")
     };
     ret = msg_checksum_cb(&packet);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
-    
+
     // Null in type handler
     ret = ubx_msg_type_handler(NULL);
     TEST_ASSERT_EQUAL(ESP_ERR_INVALID_ARG, ret);
-    
+
     packet.msg = (uint8_t[]){0x01, 0x07, 0x5C, 0x00};
     packet.msg_size = 100;
     ret = ubx_msg_type_handler(&packet);
@@ -503,9 +503,9 @@ TEST_CASE("Message handler - large payload handling", "[ubx][msg_handler]")
         .ubx_msg = &test_msg,
         .ubx_msg_type = MT_NONE
     };
-    
+
     esp_err_t ret = ubx_msg_type_handler(&packet);
-    
+
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_NAV_SAT, packet.ubx_msg_type);
 }

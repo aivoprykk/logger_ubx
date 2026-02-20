@@ -14,6 +14,7 @@ static size_t rx_buf_used_max = 0;
 static size_t rx_buf_used_min = SIZE_MAX;
 #endif
 
+#define UBX_UART_TASK_STACK_SIZE 2560
 #define UBX_RX_BUF_SIZE 2048  // Larger circular buffer to absorb bursts (2KB for 20Hz+ GPS)
 #define UBX_UART_QUEUE_SIZE 20
 #define UBX_UART_TMP_BUF_SIZE 1024  // Temporary buffer for UART reads
@@ -84,10 +85,10 @@ out:
 // Read from circular buffer into destination (non-blocking, returns bytes read)
 size_t ubx_rx_buf_read(ubx_ctx_t *ctx, uint8_t *dst, size_t len, uint32_t timeout_ms) {
     if (!ctx || !ctx->rx_buffer || !dst || len == 0) return 0;
-    
+
     uint32_t start = get_millis();
     size_t total_read = 0;
-    
+
     while (total_read < len) {
         if (xSemaphoreTake(ctx->rx_buf_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
             size_t available = ubx_rx_buf_available(ctx);
@@ -95,7 +96,7 @@ size_t ubx_rx_buf_read(ubx_ctx_t *ctx, uint8_t *dst, size_t len, uint32_t timeou
                 size_t to_read = (len - total_read) < available ? (len - total_read) : available;
                 size_t tail = ctx->rx_buf_tail;
                 size_t buf_size = ctx->rx_buf_size;
-                
+
                 // Optimized copy: handle wrap-around in two chunks max
                 if (tail + to_read <= buf_size) {
                     // Contiguous read - no wrap
@@ -111,21 +112,21 @@ size_t ubx_rx_buf_read(ubx_ctx_t *ctx, uint8_t *dst, size_t len, uint32_t timeou
                 total_read += to_read;
             }
             xSemaphoreGive(ctx->rx_buf_mutex);
-            
+
             if (total_read >= len) break;
         }
-        
+
         // Check timeout
         if (timeout_ms > 0 && (get_millis() - start) >= timeout_ms) {
             break;
         }
-        
+
         // Yield briefly if we haven't read enough yet
         if (total_read < len) {
             vTaskDelay(pdMS_TO_TICKS(1));
         }
     }
-    
+
     return total_read;
 }
 
@@ -134,15 +135,15 @@ static void ubx_uart_event_task(void *arg) {
     ubx_ctx_t *ctx = (ubx_ctx_t *)arg;
     uart_event_t event;
     uint8_t *dtmp = (uint8_t *)malloc(UBX_UART_TMP_BUF_SIZE);
-    
+
     if (!dtmp) {
         ELOG(TAG, "[%s] Failed to allocate temp buffer", __FUNCTION__);
         vTaskDelete(NULL);
         return;
     }
-    
+
     ILOG(TAG, "[%s] UART event task started", __FUNCTION__);
-    
+
     while (ctx && ctx->uart_num >= 0) {
         // Wait for UART event (blocks until event or timeout)
         if (xQueueReceive(ctx->uart_event_queue, &event, pdMS_TO_TICKS(100))) {
@@ -153,7 +154,7 @@ static void ubx_uart_event_task(void *arg) {
                         int len = uart_read_bytes(ctx->uart_num, dtmp, 
                                                  event.size > UBX_UART_TMP_BUF_SIZE ? UBX_UART_TMP_BUF_SIZE : event.size, 
                                                  pdMS_TO_TICKS(10));
-                        
+
                         if (len > 0) {
                             // Try to acquire mutex with longer timeout to avoid dropping data
                             if (xSemaphoreTake(ctx->rx_buf_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
@@ -200,7 +201,7 @@ static void ubx_uart_event_task(void *arg) {
                                     ctx->link_lost = true;
                                     used = 0;
                                 }
-                                
+
                                 xSemaphoreGive(ctx->rx_buf_mutex);
 
                                 // Always signal consumer when data is written (even if frame check fails due to mutex)
@@ -218,31 +219,31 @@ static void ubx_uart_event_task(void *arg) {
                         }
                     }
                     break;
-                    
+
                 case UART_FIFO_OVF:
                     WLOG(TAG, "[%s] UART FIFO overflow", __FUNCTION__);
                     uart_flush_input(ctx->uart_num);
                     xQueueReset(ctx->uart_event_queue);
                     break;
-                    
+
                 case UART_BUFFER_FULL:
                     WLOG(TAG, "[%s] UART ring buffer full", __FUNCTION__);
                     uart_flush_input(ctx->uart_num);
                     xQueueReset(ctx->uart_event_queue);
                     break;
-                    
+
                 case UART_BREAK:
                 case UART_PARITY_ERR:
                 case UART_FRAME_ERR:
                     // Silently ignore - GPS data can trigger false positives
                     break;
-                    
+
                 default:
                     break;
             }
         }
     }
-    
+
     free(dtmp);
     ctx->uart_event_task = NULL;
     ILOG(TAG, "[%s] UART event task stopped", __FUNCTION__);
@@ -252,15 +253,15 @@ static void ubx_uart_event_task(void *arg) {
 // Initialize event-driven UART infrastructure
 esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
     FUNC_ENTRY(TAG);
-    
+
     if (!ctx) return ESP_ERR_INVALID_ARG;
-    
+
     // Check if already initialized
     if (ctx->uart_event_task || ctx->rx_buffer || ctx->rx_buf_mutex) {
         WLOG(TAG, "[%s] Already initialized, skipping", __FUNCTION__);
         return ESP_OK;
     }
-    
+
     // Allocate circular buffer
     ctx->rx_buf_size = UBX_RX_BUF_SIZE;
     ctx->rx_buffer = (uint8_t *)heap_caps_malloc(ctx->rx_buf_size, MALLOC_CAP_8BIT);
@@ -268,10 +269,10 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
         ELOG(TAG, "[%s] Failed to allocate RX buffer", __FUNCTION__);
         return ESP_ERR_NO_MEM;
     }
-    
+
     ctx->rx_buf_head = 0;
     ctx->rx_buf_tail = 0;
-    
+
     // Create mutex for buffer access
     ctx->rx_buf_mutex = xSemaphoreCreateMutex();
     if (!ctx->rx_buf_mutex) {
@@ -280,7 +281,7 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
         ctx->rx_buffer = NULL;
         return ESP_ERR_NO_MEM;
     }
-    
+
     // Create counting semaphore for message ready notification (prevents loss when many frames arrive)
     ctx->msg_ready = xSemaphoreCreateCounting(UBX_MSG_READY_DEPTH, 0);
     if (!ctx->msg_ready) {
@@ -291,19 +292,19 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
         ctx->rx_buf_mutex = NULL;
         return ESP_ERR_NO_MEM;
     }
-    
+
     // UART event queue already created during uart_driver_install
     // Just create the event handler task
     BaseType_t ret = xTaskCreatePinnedToCore(
         ubx_uart_event_task,
         "ubx_uart_evt",
-        4096,
+        UBX_UART_TASK_STACK_SIZE,
         ctx,
         20,  // High priority for event handling
         &ctx->uart_event_task,
         1   // Core 1 to separate from WiFi on Core 0
     );
-    
+
     if (ret != pdPASS) {
         ELOG(TAG, "[%s] Failed to create UART event task", __FUNCTION__);
         vSemaphoreDelete(ctx->rx_buf_mutex);
@@ -312,7 +313,7 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
         ctx->rx_buf_mutex = NULL;
         return ESP_FAIL;
     }
-    
+
     ILOG(TAG, "[%s] Event-driven UART initialized (buffer: %zu bytes)", __FUNCTION__, ctx->rx_buf_size);
     return ESP_OK;
 }
@@ -320,49 +321,49 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
 // Cleanup event-driven UART infrastructure
 esp_err_t ubx_uart_event_deinit(ubx_ctx_t *ctx) {
     FUNC_ENTRY(TAG);
-    
+
     if (!ctx) return ESP_ERR_INVALID_ARG;
-    
+
     // Stop event task by marking uart_num as invalid
     if (ctx->uart_event_task) {
         int saved_uart_num = ctx->uart_num;
         ctx->uart_num = -1;  // Signal task to exit
-        
+
         // Wait for task to self-delete
         uint32_t timeout = get_millis() + 1000;
         while (ctx->uart_event_task && get_millis() < timeout) {
             vTaskDelay(pdMS_TO_TICKS(10));
         }
-        
+
         ctx->uart_num = saved_uart_num;
-        
+
         if (ctx->uart_event_task) {
             WLOG(TAG, "[%s] Force-deleting UART event task", __FUNCTION__);
             vTaskDelete(ctx->uart_event_task);
             ctx->uart_event_task = NULL;
         }
     }
-    
+
     // Free resources
     if (ctx->msg_ready) {
         vSemaphoreDelete(ctx->msg_ready);
         ctx->msg_ready = NULL;
     }
-    
+
     if (ctx->rx_buf_mutex) {
         vSemaphoreDelete(ctx->rx_buf_mutex);
         ctx->rx_buf_mutex = NULL;
     }
-    
+
     if (ctx->rx_buffer) {
         free(ctx->rx_buffer);
         ctx->rx_buffer = NULL;
     }
-    
+
     ctx->rx_buf_size = 0;
     ctx->rx_buf_head = 0;
     ctx->rx_buf_tail = 0;
-    
+
     ILOG(TAG, "[%s] Event-driven UART cleaned up", __FUNCTION__);
     return ESP_OK;
 }
@@ -371,7 +372,7 @@ esp_err_t ubx_uart_event_deinit(ubx_ctx_t *ctx) {
 // Print circular buffer health statistics
 void ubx_uart_print_buffer_stats(ubx_ctx_t *ctx) {
     if (!ctx) return;
-    
+
     // Snapshot RX ring buffer usage (non-blocking if mutex busy)
     size_t buf_size = ctx->rx_buf_size;
     size_t buf_avail = 0;
@@ -385,16 +386,16 @@ void ubx_uart_print_buffer_stats(ubx_ctx_t *ctx) {
             buf_avail = buf_size - tail + head;
         }
         buf_free = buf_size > 0 ? buf_size - buf_avail - 1 : 0;
-        
+
         // Update tracking
         if (buf_avail > rx_buf_used_max) rx_buf_used_max = buf_avail;
         if (buf_avail < rx_buf_used_min) rx_buf_used_min = buf_avail;
-        
+
         xSemaphoreGive(ctx->rx_buf_mutex);
     }
     float buf_used_pct = buf_size > 0 ? ((float)buf_avail * 100.0f) / (float)buf_size : 0.0f;
     float buf_used_max_pct = buf_size > 0 ? ((float)rx_buf_used_max * 100.0f) / (float)buf_size : 0.0f;
-    
+
     printf("[UART] ========== UART BUFFER STATS ===========\n");
     printf("[UART] RX Buffer: size=%zu avail=%zu free=%zu used=%.1f%%\n",
         buf_size, buf_avail, buf_free, buf_used_pct);

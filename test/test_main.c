@@ -41,19 +41,19 @@ void app_main(void) {
     ESP_LOGI(TAG, "  - Checksum validation");
     ESP_LOGI(TAG, "  - UART integration");
     ESP_LOGI(TAG, "");
-    
+
     // Wait for system to stabilize
     vTaskDelay(pdMS_TO_TICKS(100));
-    
+
     // Run all Unity tests
     UNITY_BEGIN();
-    
+
     // Tests are auto-registered via TEST_CASE macro
     // Unity will discover and run them
     unity_run_all_tests();
-    
+
     UNITY_END();
-    
+
     // Keep task alive for monitoring
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
