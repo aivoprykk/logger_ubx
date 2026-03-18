@@ -16,14 +16,14 @@ menu "Logger Ublox GPS Module Configuration"
         config UBLOX_UART_RXD
             int "GPS Uart Rxd"
             default 43 if HAS_BOARD_LILYGO_T_DISPLAY_S3_AMOLED
-            default 43 if HAS_BOARD_LILYGO_T_DISPLAY_S3
+            default 17 if HAS_BOARD_LILYGO_T_DISPLAY_S3
             default 32
             help
             Specify the GPS UART Recieve Pin.
         config UBLOX_UART_TXD
             int "GPS Uart Txd"
             default 44 if HAS_BOARD_LILYGO_T_DISPLAY_S3_AMOLED
-            default 44 if HAS_BOARD_LILYGO_T_DISPLAY_S3
+            default 18 if HAS_BOARD_LILYGO_T_DISPLAY_S3
             default 33
             help
             Specify the GPS UART transmit pin

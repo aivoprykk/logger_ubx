@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include <stdint.h>
 #include <string.h>
+#include <esp_heap_caps.h>
 
 #include "esp_err.h"
 
@@ -665,7 +666,12 @@ esp_err_t send_ubx_cfg_msg(ubx_ctx_t *ubx_dev, uint8_t cls, uint8_t id, const ui
     uint8_t *msg = 0;
     size_t msgb_len = sizeof(msgb), total_len = msgb_len + len;
     if(len){
-        msg = calloc(total_len, sizeof(uint8_t));
+        msg = heap_caps_calloc(total_len, sizeof(uint8_t),
+            MALLOC_CAP_DEFAULT);
+        if (!msg) {
+            ELOG(TAG, "[%s] heap_caps_calloc failed", __FUNCTION__);
+            return ESP_ERR_NO_MEM;
+        }
         memcpy(msg, &(msgb[0]), 6); // copy header and class
         encode_uint16(msg+4, len); // add payload size
         memcpy(msg+6, payload, len); // copy payload
@@ -678,7 +684,7 @@ esp_err_t send_ubx_cfg_msg(ubx_ctx_t *ubx_dev, uint8_t cls, uint8_t id, const ui
         ELOG(TAG, "[%s] failed: %s", __FUNCTION__, esp_err_to_name(ret));
     }
     if(len)
-        free(msg);
+        heap_caps_free(msg);
     return ret;
 }
 
@@ -686,11 +692,16 @@ esp_err_t ubx_cfg_valset(ubx_ctx_t *ubx_dev, const uint8_t * payload, size_t len
     FUNC_ENTRYD(TAG);
     if(ubx_dev->hw_type < UBX_TYPE_M9)
         return ESP_ERR_INVALID_ARG;
-    uint8_t *msg = calloc(len+4, sizeof(uint8_t));
+    uint8_t *msg = heap_caps_calloc(len+4, sizeof(uint8_t),
+        MALLOC_CAP_DEFAULT);
+    if (!msg) {
+        ELOG(TAG, "[%s] heap_caps_calloc failed", __FUNCTION__);
+        return ESP_ERR_NO_MEM;
+    }
     memcpy(msg, (const uint8_t[]){0x01, 0x01, 0x00, 0x00}, 4);
     memcpy(msg+4, payload, len);
     esp_err_t ret = send_ubx_cfg_msg(ubx_dev, CLS_CFG, CFG_VALSET, msg, len + 4, need_ack);
-    free(msg);
+    heap_caps_free(msg);
     return ret;
 }
 

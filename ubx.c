@@ -10,6 +10,7 @@
 #include "ubx_private.h"
 
 #if defined(CONFIG_UBLOX_ENABLED)
+#include <esp_heap_caps.h>
 #include "config_observer.h"
 #include "config_lock.h"
 #include "ubx.h"
@@ -65,12 +66,16 @@ void ubx_unlock() {
 
 ubx_ctx_t *ubx_ctx_new() {
 	FUNC_ENTRY(TAG);
-	ubx_ctx_t *ubx = (ubx_ctx_t *)calloc(1, sizeof(ubx_ctx_t));
-	esp_err_t ret = ESP_OK;
-	ret = ubx_ctx_init(ubx);
+	ubx_ctx_t *ubx = (ubx_ctx_t *)heap_caps_calloc(
+		1, sizeof(ubx_ctx_t), MALLOC_CAP_DEFAULT);
+	if (!ubx) {
+		ELOG(TAG, "[%s] heap_caps_calloc failed", __FUNCTION__);
+		return NULL;
+	}
+	esp_err_t ret = ubx_ctx_init(ubx);
 	if (ret != ESP_OK) {
 		ELOG(TAG, "[%s] ubx_ctx_init failed", __FUNCTION__);
-		free(ubx);
+		heap_caps_free(ubx);
 		return NULL;
 	}
 	return ubx;
@@ -80,7 +85,7 @@ esp_err_t ubx_ctx_delete(ubx_ctx_t *ubx_ctx) {
 	FUNC_ENTRY(TAG);
 	ubx_ctx_deinit(ubx_ctx);
 	if (ubx_ctx) {
-		free(ubx_ctx);
+		heap_caps_free(ubx_ctx);
 		return ESP_OK;
 	}
 	return ESP_ERR_INVALID_ARG;
@@ -101,15 +106,23 @@ void ubx_config_changed_cb(size_t group, size_t index) {
 	case cfg_ubx_ubx_output_rate:
 		FUNC_ENTRY_ARGS(TAG, "changed rate=%d gnss=%u",
 						g_rtc_config.ubx.output_rate, g_rtc_config.ubx.gnss);
-		// Post event to trigger async reconfiguration instead of blocking
-		esp_event_post(UBX_EVENT, UBX_EVENT_CONFIG_CHANGED, NULL, 0,
-					   portMAX_DELAY);
+		// Post event to trigger async reconfiguration instead of blocking.
+		// MUST NOT use portMAX_DELAY: this callback runs inside
+		// config_observer_notify() while config_lock is held.  Blocking
+		// here can deadlock if the event queue is full.
+		if (esp_event_post(UBX_EVENT, UBX_EVENT_CONFIG_CHANGED, NULL, 0,
+						   pdMS_TO_TICKS(100)) != ESP_OK) {
+			WLOG(TAG, "EVT_FAIL: UBX_EVENT_CONFIG_CHANGED");
+		}
 		break;
 	case cfg_ubx_ubx_nav_mode:
 		FUNC_ENTRY_ARGS(TAG, "changed nav_mode=%d", g_rtc_config.ubx.nav_mode);
-		// Post event to trigger async nav mode change instead of blocking
-		esp_event_post(UBX_EVENT, UBX_EVENT_NAV_MODE_CHANGED, NULL, 0,
-					   portMAX_DELAY);
+		// Post event to trigger async nav mode change instead of blocking.
+		// Same safety concern as above — bounded timeout.
+		if (esp_event_post(UBX_EVENT, UBX_EVENT_NAV_MODE_CHANGED, NULL, 0,
+						   pdMS_TO_TICKS(100)) != ESP_OK) {
+			WLOG(TAG, "EVT_FAIL: UBX_EVENT_NAV_MODE_CHANGED");
+		}
 		break;
 	default:
 		break;
@@ -259,10 +272,14 @@ static esp_err_t ubx_uart_init(ubx_ctx_t *ubx_ctx) {
 			goto done;
 		}
 	done:
-		esp_event_post(UBX_EVENT,
+		// Bounded timeout: this runs while config_lock is held;
+		// portMAX_DELAY here could deadlock the config subsystem.
+		if (esp_event_post(UBX_EVENT,
 					   !ret ? UBX_EVENT_UART_INIT_DONE
 							: UBX_EVENT_UART_INIT_FAIL,
-					   NULL, 0, portMAX_DELAY);
+					   NULL, 0, pdMS_TO_TICKS(100)) != ESP_OK) {
+			WLOG(TAG, "EVT_FAIL: UART_INIT event");
+		}
 		if (!ret) {
 			ubx_ctx->uart_is_on = true;
 		}
@@ -302,8 +319,11 @@ static esp_err_t ubx_uart_deinit(ubx_ctx_t *ubx_ctx) {
 			ELOG(TAG, "[%s] ubx_pins_deinit failed", __FUNCTION__);
 		}
 		if (!ret) {
-			esp_event_post(UBX_EVENT, UBX_EVENT_UART_DEINIT_DONE, NULL, 0,
-						   portMAX_DELAY);
+			if (esp_event_post(UBX_EVENT, UBX_EVENT_UART_DEINIT_DONE,
+							   NULL, 0,
+							   pdMS_TO_TICKS(100)) != ESP_OK) {
+				WLOG(TAG, "EVT_FAIL: UART_DEINIT_DONE");
+			}
 			ubx_ctx->uart_is_on = false;
 		}
 #if (C_LOG_LEVEL <= LOG_INFO_NUM)
@@ -341,6 +361,7 @@ esp_err_t ubx_off(ubx_ctx_t *ubx_ctx) {
 	ubx_ctx->ready = false;
 	ubx_ctx->ready_time = 0;
 	ubx_ctx->shutdown_requested = false;
+	ubx_ctx->reconfig_requested = false;
 	IMEAS_END(TAG);
 	return ret;
 }
@@ -427,7 +448,7 @@ esp_err_t ubx_set_gnss_and_rate(ubx_ctx_t *ubx_ctx, uint8_t gnss,
 					 rate);
 	// if(g_rtc_config.ubx.msgout_sat){
 	for (try = 0; try <= max_tries; ++try) {
-		if (ubx_ctx->shutdown_requested)
+		if (ubx_ctx->shutdown_requested || ubx_ctx->reconfig_requested)
 			goto fail;
 		ret = ubx_set_msgout_sat(ubx_ctx);
 		if (ret == ESP_OK)
@@ -439,7 +460,7 @@ esp_err_t ubx_set_gnss_and_rate(ubx_ctx_t *ubx_ctx, uint8_t gnss,
 	// }
 	FUNC_ENTRY_ARGSD(TAG, "msgout_sat done");
 	for (try = 0; try <= max_tries; ++try) {
-		if (ubx_ctx->shutdown_requested)
+		if (ubx_ctx->shutdown_requested || ubx_ctx->reconfig_requested)
 			goto fail;
 		ret = ubx_set_gnss(ubx_ctx, gnss);
 		if (ret == ESP_OK) {
@@ -454,7 +475,7 @@ esp_err_t ubx_set_gnss_and_rate(ubx_ctx_t *ubx_ctx, uint8_t gnss,
 	FUNC_ENTRY_ARGSD(TAG, "set_gnss done");
 
 	for (try = 0; try <= max_tries; ++try) {
-		if (ubx_ctx->shutdown_requested)
+		if (ubx_ctx->shutdown_requested || ubx_ctx->reconfig_requested)
 			goto fail;
 		ret = ubx_set_uart_out_rate(ubx_ctx, rate);
 		if (ret == ESP_OK)
@@ -465,8 +486,10 @@ esp_err_t ubx_set_gnss_and_rate(ubx_ctx_t *ubx_ctx, uint8_t gnss,
 		goto fail;
 	}
 	FUNC_ENTRY_ARGSD(TAG, "set_rate done");
-	esp_event_post(UBX_EVENT, UBX_EVENT_SAMPLE_RATE_CHANGED, 0, 0,
-				   portMAX_DELAY);
+	if (esp_event_post(UBX_EVENT, UBX_EVENT_SAMPLE_RATE_CHANGED, 0, 0,
+					   pdMS_TO_TICKS(100)) != ESP_OK) {
+		WLOG(TAG, "EVT_FAIL: SAMPLE_RATE_CHANGED");
+	}
 fail:
 	FUNC_ENTRY_ARGSD(TAG, "done, status %d", ret);
 	return ret;
@@ -518,7 +541,8 @@ int print_ubx_ctx_state(ubx_ctx_t *ubx_ctx) {
 #define UBX_SETUP_TRY_OP(op_call, op_name, critical)                           \
 	do {                                                                       \
 		for (try = 0; try <= max_tries; ++try) {                               \
-			if (ubx_ctx->shutdown_requested)                                   \
+			if (ubx_ctx->shutdown_requested ||                                  \
+			    ubx_ctx->reconfig_requested)                                    \
 				goto fail;                                                     \
 			ret = (op_call);                                                   \
 			if (ret == ESP_OK)                                                 \
@@ -586,8 +610,11 @@ esp_err_t ubx_setup(ubx_ctx_t *ubx_ctx) {
 	UBX_SETUP_TRY_OP(ubx_get_hw_id(ubx_ctx), "ubx_get_hw_id", false);
 	UBX_SETUP_TRY_OP(ubx_get_gnss(ubx_ctx), "ubx_get_gnss", true);
 
-	if (!ubx_ctx->shutdown_requested) {
-		esp_event_post(UBX_EVENT, UBX_EVENT_SETUP_DONE, NULL, 0, portMAX_DELAY);
+	if (!ubx_ctx->shutdown_requested && !ubx_ctx->reconfig_requested) {
+		if (esp_event_post(UBX_EVENT, UBX_EVENT_SETUP_DONE, NULL, 0,
+						   pdMS_TO_TICKS(100)) != ESP_OK) {
+			WLOG(TAG, "EVT_FAIL: SETUP_DONE");
+		}
 		if (!ret) {
 			WLOG(TAG, "[%s] setup done, device ready!", __func__);
 			ubx_ctx->ready = true;

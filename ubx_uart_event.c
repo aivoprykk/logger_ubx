@@ -24,6 +24,9 @@ static size_t rx_buf_used_min = SIZE_MAX;
 #define UBX_LINK_LOSS_MS 3000       // Consider link stale if no valid frames in this window
 #define UBX_RX_BACKPRESSURE_PCT 75  // Flush when stale link and buffer exceeds this percent
 
+// Dynamic buffers — allocated in ubx_uart_event_init(), freed in ubx_uart_event_deinit().
+// This allows GPS memory to be reclaimed when switching to WiFi mode.
+
 // Circular buffer helper: available bytes
 inline size_t ubx_rx_buf_available(ubx_ctx_t *ctx) {
     if (ctx->rx_buf_head >= ctx->rx_buf_tail) {
@@ -134,13 +137,7 @@ size_t ubx_rx_buf_read(ubx_ctx_t *ctx, uint8_t *dst, size_t len, uint32_t timeou
 static void ubx_uart_event_task(void *arg) {
     ubx_ctx_t *ctx = (ubx_ctx_t *)arg;
     uart_event_t event;
-    uint8_t *dtmp = (uint8_t *)malloc(UBX_UART_TMP_BUF_SIZE);
-
-    if (!dtmp) {
-        ELOG(TAG, "[%s] Failed to allocate temp buffer", __FUNCTION__);
-        vTaskDelete(NULL);
-        return;
-    }
+    uint8_t *dtmp = ctx->uart_tmp_buf;
 
     ILOG(TAG, "[%s] UART event task started", __FUNCTION__);
 
@@ -244,7 +241,6 @@ static void ubx_uart_event_task(void *arg) {
         }
     }
 
-    free(dtmp);
     ctx->uart_event_task = NULL;
     ILOG(TAG, "[%s] UART event task stopped", __FUNCTION__);
     vTaskDelete(NULL);
@@ -262,22 +258,33 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
         return ESP_OK;
     }
 
-    // Allocate circular buffer
-    ctx->rx_buf_size = UBX_RX_BUF_SIZE;
-    ctx->rx_buffer = (uint8_t *)heap_caps_malloc(ctx->rx_buf_size, MALLOC_CAP_8BIT);
+    // Allocate RX circular buffer from internal RAM (freed in deinit when switching to WiFi mode)
+    ctx->rx_buffer = heap_caps_malloc(UBX_RX_BUF_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!ctx->rx_buffer) {
-        ELOG(TAG, "[%s] Failed to allocate RX buffer", __FUNCTION__);
+        ELOG(TAG, "[%s] Failed to allocate rx_buffer (%d bytes)", __FUNCTION__, UBX_RX_BUF_SIZE);
         return ESP_ERR_NO_MEM;
     }
-
+    memset(ctx->rx_buffer, 0, UBX_RX_BUF_SIZE);
+    ctx->rx_buf_size = UBX_RX_BUF_SIZE;
     ctx->rx_buf_head = 0;
     ctx->rx_buf_tail = 0;
+
+    // Allocate UART read scratch buffer (freed in deinit)
+    ctx->uart_tmp_buf = heap_caps_malloc(UBX_UART_TMP_BUF_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!ctx->uart_tmp_buf) {
+        ELOG(TAG, "[%s] Failed to allocate uart_tmp_buf (%d bytes)", __FUNCTION__, UBX_UART_TMP_BUF_SIZE);
+        heap_caps_free(ctx->rx_buffer);
+        ctx->rx_buffer = NULL;
+        return ESP_ERR_NO_MEM;
+    }
 
     // Create mutex for buffer access
     ctx->rx_buf_mutex = xSemaphoreCreateMutex();
     if (!ctx->rx_buf_mutex) {
         ELOG(TAG, "[%s] Failed to create mutex", __FUNCTION__);
-        free(ctx->rx_buffer);
+        heap_caps_free(ctx->uart_tmp_buf);
+        heap_caps_free(ctx->rx_buffer);
+        ctx->uart_tmp_buf = NULL;
         ctx->rx_buffer = NULL;
         return ESP_ERR_NO_MEM;
     }
@@ -287,7 +294,6 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
     if (!ctx->msg_ready) {
         ELOG(TAG, "[%s] Failed to create msg_ready semaphore", __FUNCTION__);
         vSemaphoreDelete(ctx->rx_buf_mutex);
-        free(ctx->rx_buffer);
         ctx->rx_buffer = NULL;
         ctx->rx_buf_mutex = NULL;
         return ESP_ERR_NO_MEM;
@@ -308,7 +314,6 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
     if (ret != pdPASS) {
         ELOG(TAG, "[%s] Failed to create UART event task", __FUNCTION__);
         vSemaphoreDelete(ctx->rx_buf_mutex);
-        free(ctx->rx_buffer);
         ctx->rx_buffer = NULL;
         ctx->rx_buf_mutex = NULL;
         return ESP_FAIL;
@@ -355,8 +360,13 @@ esp_err_t ubx_uart_event_deinit(ubx_ctx_t *ctx) {
         ctx->rx_buf_mutex = NULL;
     }
 
+    // Free dynamically allocated GPS buffers — reclaims 3KB for WiFi mode
+    if (ctx->uart_tmp_buf) {
+        heap_caps_free(ctx->uart_tmp_buf);
+        ctx->uart_tmp_buf = NULL;
+    }
     if (ctx->rx_buffer) {
-        free(ctx->rx_buffer);
+        heap_caps_free(ctx->rx_buffer);
         ctx->rx_buffer = NULL;
     }
 

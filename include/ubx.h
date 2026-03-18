@@ -76,6 +76,7 @@ typedef struct ubx_ctx_s {
     size_t rx_buf_head;
     size_t rx_buf_tail;
     SemaphoreHandle_t rx_buf_mutex;
+    uint8_t *uart_tmp_buf;            ///< scratch buffer for UART reads (dynamic, freed on deinit)
     SemaphoreHandle_t msg_ready;  // Binary semaphore: signaled when message is ready
     uint32_t last_rx_ms;
     uint32_t last_valid_ms;
@@ -87,6 +88,7 @@ typedef struct ubx_ctx_s {
     bool ready;
     uint32_t ready_time;
     bool shutdown_requested;
+    volatile bool reconfig_requested;  ///< Abort in-progress setup for new config
 } ubx_ctx_t;
 
 /**
@@ -120,6 +122,7 @@ typedef struct ubx_ctx_s {
     .rx_buf_head = 0,                                \
     .rx_buf_tail = 0,                                \
     .rx_buf_mutex = NULL,                            \
+    .uart_tmp_buf = NULL,                            \
     .last_rx_ms = 0,                                 \
     .last_valid_ms = 0,                              \
     .link_lost = false,                              \
@@ -129,6 +132,7 @@ typedef struct ubx_ctx_s {
     .ready = false,                                \
     .ready_time = 0,                                \
     .shutdown_requested = false,                     \
+    .reconfig_requested = false,                     \
 }
 
 /**
