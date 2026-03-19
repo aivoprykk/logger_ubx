@@ -96,8 +96,13 @@ void ubx_config_changed_cb(size_t group, size_t index) {
 	if (group != config_ubx_handle()) {
 		return;
 	}
+	if (index == cfg_ubx_ubx_nav_mode) {
+		ubx_nav_mode_on_base_mode_changed();
+	}
 	if (!ubx_ctx_global || !ubx_ctx_global->ready) {
-		ELOG(TAG, "[%s] ubx_ctx not ready", __FUNCTION__);
+		if (index != cfg_ubx_ubx_nav_mode) {
+			ELOG(TAG, "[%s] ubx_ctx not ready", __FUNCTION__);
+		}
 		return;
 	}
 	FUNC_ENTRY_ARGS(TAG, "group: %zu, index: %zu", group, index);
@@ -116,13 +121,10 @@ void ubx_config_changed_cb(size_t group, size_t index) {
 		}
 		break;
 	case cfg_ubx_ubx_nav_mode:
-		FUNC_ENTRY_ARGS(TAG, "changed nav_mode=%d", g_rtc_config.ubx.nav_mode);
-		// Post event to trigger async nav mode change instead of blocking.
-		// Same safety concern as above — bounded timeout.
-		if (esp_event_post(UBX_EVENT, UBX_EVENT_NAV_MODE_CHANGED, NULL, 0,
-						   pdMS_TO_TICKS(100)) != ESP_OK) {
-			WLOG(TAG, "EVT_FAIL: UBX_EVENT_NAV_MODE_CHANGED");
-		}
+		FUNC_ENTRY_ARGS(TAG, "changed base_nav_mode=%d effective_nav_mode=%d",
+				g_rtc_config.ubx.nav_mode,
+				ubx_nav_mode_get_effective());
+		ubx_request_nav_mode_apply(ubx_ctx_global);
 		break;
 	default:
 		break;
@@ -362,6 +364,7 @@ esp_err_t ubx_off(ubx_ctx_t *ubx_ctx) {
 	ubx_ctx->ready_time = 0;
 	ubx_ctx->shutdown_requested = false;
 	ubx_ctx->reconfig_requested = false;
+	ubx_ctx->nav_mode_apply_requested = false;
 	IMEAS_END(TAG);
 	return ret;
 }
@@ -522,7 +525,8 @@ int print_ubx_ctx_state(ubx_ctx_t *ubx_ctx) {
 		   g_rtc_config.ubx.output_rate == 0
 			   ? 0
 			   : (uint8_t)(1000 / HZ_TO_MS(g_rtc_config.ubx.output_rate)));
-	printf("Nav mode: %d\n", g_rtc_config.ubx.nav_mode);
+	printf("Nav mode: base=%d effective=%d\n", g_rtc_config.ubx.nav_mode,
+		   ubx_nav_mode_get_effective());
 	printf("Message out sat: %d\n", g_rtc_config.ubx.msgout_sat);
 
 	printf("UBX Initialized: %s\n", ubx_ctx->initialized ? "true" : "false");
@@ -592,7 +596,8 @@ esp_err_t ubx_setup(ubx_ctx_t *ubx_ctx) {
 					 "ubx_set_prot_msg_out", true);
 
 	// Non-critical operations - log errors but continue
-	UBX_SETUP_TRY_OP(ubx_set_nav_mode(ubx_ctx, g_rtc_config.ubx.nav_mode),
+	ubx_ctx->nav_mode_apply_requested = false;
+	UBX_SETUP_TRY_OP(ubx_set_nav_mode(ubx_ctx, ubx_nav_mode_get_effective()),
 					 "ubx_set_nav_mode", false);
 	UBX_SETUP_TRY_OP(ubx_set_msgout(ubx_ctx), "ubx_set_msgout", false);
 
@@ -690,6 +695,28 @@ esp_err_t ubx_set_nav_mode(ubx_ctx_t *ubx, ubx_nav_mode_t nav_mode) {
 											  0x00,
 											  0x00},
 							36, true);
+}
+
+void ubx_request_nav_mode_apply(ubx_ctx_t *ubx) {
+	if (!ubx)
+		return;
+	ubx->nav_mode_apply_requested = true;
+}
+
+esp_err_t ubx_apply_pending_nav_mode(ubx_ctx_t *ubx) {
+	if (ubx == NULL)
+		return ESP_ERR_INVALID_ARG;
+	if (!ubx->nav_mode_apply_requested || !ubx->ready || ubx->setup_progress)
+		return ESP_OK;
+
+	ubx->nav_mode_apply_requested = false;
+	const ubx_nav_mode_t nav_mode = ubx_nav_mode_get_effective();
+	const esp_err_t ret = ubx_set_nav_mode(ubx, nav_mode);
+
+	if (ret != ESP_OK && !ubx->shutdown_requested && !ubx->reconfig_requested) {
+		ubx->nav_mode_apply_requested = true;
+	}
+	return ret;
 }
 
 static esp_err_t ubx_set_prot_msg_out(ubx_ctx_t *ubx, bool enable_nmea,

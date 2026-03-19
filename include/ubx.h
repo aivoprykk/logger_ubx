@@ -25,6 +25,7 @@ extern "C" {
 #include "stdint.h"
 
 #include "config_ubx.h"
+#include "ubx_nav_mode.h"
 
 /**
  * @brief Navigation mode enum.
@@ -89,6 +90,7 @@ typedef struct ubx_ctx_s {
     uint32_t ready_time;
     bool shutdown_requested;
     volatile bool reconfig_requested;  ///< Abort in-progress setup for new config
+    volatile bool nav_mode_apply_requested;
 } ubx_ctx_t;
 
 /**
@@ -133,6 +135,7 @@ typedef struct ubx_ctx_s {
     .ready_time = 0,                                \
     .shutdown_requested = false,                     \
     .reconfig_requested = false,                     \
+    .nav_mode_apply_requested = false,               \
 }
 
 /**
@@ -192,6 +195,8 @@ esp_err_t ubx_off(ubx_ctx_t *ubx);
  *     - ESP_ERR_INVALID_CRC   Checksum for the wrong message received
  */
 esp_err_t ubx_set_nav_mode(ubx_ctx_t *ubx, ubx_nav_mode_t nav_mode);
+void ubx_request_nav_mode_apply(ubx_ctx_t *ubx);
+esp_err_t ubx_apply_pending_nav_mode(ubx_ctx_t *ubx);
 
 esp_err_t ubx_set_gnss_and_rate(ubx_ctx_t *ubx_dev, uint8_t gnss, uint8_t rate);
 

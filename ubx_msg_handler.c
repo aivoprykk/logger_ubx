@@ -651,8 +651,7 @@ static esp_err_t ubx_cfg_send_m(ubx_ctx_t *ubx_dev, uint8_t * msg, size_t msg_le
             ELOG(TAG, "[%s] write_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
             goto done;
         }
-        delay_ms(100);
-        if(need_ack) 
+        if(need_ack)
             ret = ack_status(ubx_dev, *(msg+2), *(msg+3));
     done:
        ubx_unlock();
