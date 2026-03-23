@@ -561,6 +561,14 @@ static uint32_t ubx_rtc_cache_boot_baud(void) {
 			   : 0;
 }
 
+static void ubx_rtc_cache_invalidate_state(void) {
+	if (!ubx_rtc_cache_header_valid()) {
+		return;
+	}
+
+	s_ubx_rtc_cache.flags &= UBX_RTC_CACHE_FLAG_BOOT_BAUD_VALID;
+}
+
 static void ubx_rtc_cache_store_boot_baud(uint32_t boot_baud) {
 	if (!ubx_baud_rate_valid(boot_baud)) {
 		return;
@@ -687,6 +695,29 @@ static bool ubx_rtc_cache_apply(ubx_ctx_t *ubx_ctx) {
 		 __func__, ubx_ctx->hw_type, g_rtc_config.ubx.baud,
 		 ubx_ctx->effective_output_rate);
 	return true;
+}
+
+static esp_err_t ubx_verify_current_stream(ubx_ctx_t *ubx) {
+	if (!ubx) {
+		return ESP_ERR_INVALID_ARG;
+	}
+
+	uint8_t sniff[384] = {0};
+	const size_t got = ubx_rx_buf_read(ubx, sniff, sizeof(sniff), 2000);
+	if (got == 0) {
+		return ESP_ERR_TIMEOUT;
+	}
+
+	for (size_t i = 0; i < got; ++i) {
+		if (sniff[i] == UBX_HDR_A && (i + 1) < got && sniff[i + 1] == UBX_HDR_B) {
+			return ESP_OK;
+		}
+		if (sniff[i] == '$' && (i + 1) < got && sniff[i + 1] == 'G') {
+			return ESP_OK;
+		}
+	}
+
+	return ESP_ERR_INVALID_RESPONSE;
 }
 
 uint8_t ubx_get_effective_output_rate(void) {
@@ -1242,6 +1273,18 @@ esp_err_t ubx_setup(ubx_ctx_t *ubx_ctx) {
 	if (ret != ESP_OK) {
 		ELOG(TAG, "[%s] ubx_on failed", __FUNCTION__);
 		goto fail;
+	}
+
+	if (used_rtc_cache) {
+		ret = ubx_verify_current_stream(ubx_ctx);
+		if (ret != ESP_OK) {
+			WLOG(TAG,
+				 "[%s] cached receiver state produced no valid startup traffic, falling back to full probe/reconfigure",
+				 __FUNCTION__);
+			ubx_rtc_cache_invalidate_state();
+			used_rtc_cache = false;
+			ret = ESP_OK;
+		}
 	}
 
 	if (!used_rtc_cache) {

@@ -84,6 +84,7 @@ typedef struct ubx_ctx_s {
     uint32_t last_rx_ms;
     uint32_t last_valid_ms;
     bool link_lost;
+    volatile bool uart_event_stop_requested;
     /// state flags
     bool uart_is_on;
     bool setup_progress;
@@ -132,6 +133,7 @@ typedef struct ubx_ctx_s {
     .last_rx_ms = 0,                                 \
     .last_valid_ms = 0,                              \
     .link_lost = false,                              \
+    .uart_event_stop_requested = false,              \
     .uart_is_on = false,                           \
     .setup_progress = false,                         \
     .initialized = false,                               \

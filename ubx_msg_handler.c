@@ -676,13 +676,23 @@ static esp_err_t ubx_cfg_send_m(ubx_ctx_t *ubx_dev, uint8_t * msg, size_t msg_le
     DMEAS_START();
     esp_err_t ret = ESP_OK;
     if (ubx_lock(500)) {
+        if (need_ack) {
+            // Drop stale boot/runtime traffic so the following ACK wait starts on a clean stream.
+            ubx_rx_reset(ubx_dev, true);
+        }
         ret = write_ubx_msg(ubx_dev->uart_num, msg, msg_len, true);
         if (ret != ESP_OK) {
             ELOG(TAG, "[%s] write_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
             goto done;
         }
-        if(need_ack)
+        if(need_ack) {
             ret = ack_status(ubx_dev, *(msg+2), *(msg+3));
+            if (ret == ESP_ERR_TIMEOUT) {
+                WLOG(TAG, "[%s] ACK timeout for cls=0x%02x id=0x%02x, resetting RX state",
+                     __FUNCTION__, *(msg + 2), *(msg + 3));
+                ubx_rx_reset(ubx_dev, true);
+            }
+        }
     done:
        ubx_unlock();
     }

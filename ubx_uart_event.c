@@ -133,6 +133,30 @@ size_t ubx_rx_buf_read(ubx_ctx_t *ctx, uint8_t *dst, size_t len, uint32_t timeou
     return total_read;
 }
 
+void ubx_rx_reset(ubx_ctx_t *ctx, bool flush_uart_driver) {
+    if (!ctx) {
+        return;
+    }
+
+    if (ctx->rx_buf_mutex && xSemaphoreTake(ctx->rx_buf_mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
+        ctx->rx_buf_head = 0;
+        ctx->rx_buf_tail = 0;
+        xSemaphoreGive(ctx->rx_buf_mutex);
+    }
+
+    if (ctx->msg_ready) {
+        while (xSemaphoreTake(ctx->msg_ready, 0) == pdTRUE) {
+        }
+    }
+
+    if (flush_uart_driver) {
+        uart_flush_input(ctx->uart_num);
+        if (ctx->uart_event_queue) {
+            xQueueReset(ctx->uart_event_queue);
+        }
+    }
+}
+
 // UART event handler task
 static void ubx_uart_event_task(void *arg) {
     ubx_ctx_t *ctx = (ubx_ctx_t *)arg;
@@ -141,9 +165,12 @@ static void ubx_uart_event_task(void *arg) {
 
     ILOG(TAG, "[%s] UART event task started", __FUNCTION__);
 
-    while (ctx && ctx->uart_num >= 0) {
+    while (ctx && !ctx->uart_event_stop_requested) {
         // Wait for UART event (blocks until event or timeout)
         if (xQueueReceive(ctx->uart_event_queue, &event, pdMS_TO_TICKS(100))) {
+            if (ctx->uart_event_stop_requested) {
+                break;
+            }
             switch (event.type) {
                 case UART_DATA:
                     // Read available data from UART
@@ -301,6 +328,7 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
 
     // UART event queue already created during uart_driver_install
     // Just create the event handler task
+    ctx->uart_event_stop_requested = false;
     BaseType_t ret = xTaskCreatePinnedToCore(
         ubx_uart_event_task,
         "ubx_uart_evt",
@@ -329,10 +357,9 @@ esp_err_t ubx_uart_event_deinit(ubx_ctx_t *ctx) {
 
     if (!ctx) return ESP_ERR_INVALID_ARG;
 
-    // Stop event task by marking uart_num as invalid
+    // Stop the event task before tearing down the UART driver.
     if (ctx->uart_event_task) {
-        int saved_uart_num = ctx->uart_num;
-        ctx->uart_num = -1;  // Signal task to exit
+        ctx->uart_event_stop_requested = true;
 
         // Wait for task to self-delete
         uint32_t timeout = get_millis() + 1000;
@@ -340,14 +367,14 @@ esp_err_t ubx_uart_event_deinit(ubx_ctx_t *ctx) {
             vTaskDelay(pdMS_TO_TICKS(10));
         }
 
-        ctx->uart_num = saved_uart_num;
-
         if (ctx->uart_event_task) {
             WLOG(TAG, "[%s] Force-deleting UART event task", __FUNCTION__);
             vTaskDelete(ctx->uart_event_task);
             ctx->uart_event_task = NULL;
         }
     }
+
+    ctx->uart_event_stop_requested = false;
 
     // Free resources
     if (ctx->msg_ready) {

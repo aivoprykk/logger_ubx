@@ -175,6 +175,7 @@ static const char * ubx_chip_str(const struct ubx_ctx_s *ubx);
 esp_err_t ubx_uart_event_init(struct ubx_ctx_s *ctx);
 esp_err_t ubx_uart_event_deinit(struct ubx_ctx_s *ctx);
 size_t ubx_rx_buf_read(struct ubx_ctx_s *ctx, uint8_t *dst, size_t len, uint32_t timeout_ms);
+void ubx_rx_reset(struct ubx_ctx_s *ctx, bool flush_uart_driver);
 
 // Circular buffer helpers (for testing)
 size_t ubx_rx_buf_available(struct ubx_ctx_s *ctx);
