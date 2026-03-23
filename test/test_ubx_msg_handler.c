@@ -25,6 +25,37 @@ static ubx_ctx_t test_ctx;
 static ubx_msg_t test_msg;
 static uint8_t test_rx_buffer[512];
 
+static void append_rx_bytes(const uint8_t *data, size_t len) {
+    TEST_ASSERT_NOT_NULL(test_ctx.rx_buffer);
+    TEST_ASSERT_LESS_OR_EQUAL(sizeof(test_rx_buffer), test_ctx.rx_buf_head + len);
+    memcpy(&test_ctx.rx_buffer[test_ctx.rx_buf_head], data, len);
+    test_ctx.rx_buf_head += len;
+}
+
+static size_t create_ubx_frame(uint8_t *buf, uint8_t cls, uint8_t id,
+                               const uint8_t *payload, size_t payload_len) {
+    uint8_t ck_a = 0;
+    uint8_t ck_b = 0;
+
+    buf[0] = 0xB5;
+    buf[1] = 0x62;
+    buf[2] = cls;
+    buf[3] = id;
+    buf[4] = (uint8_t)(payload_len & 0xFF);
+    buf[5] = (uint8_t)((payload_len >> 8) & 0xFF);
+    if (payload_len > 0 && payload) {
+        memcpy(&buf[6], payload, payload_len);
+    }
+
+    for (size_t i = 2; i < 6 + payload_len; ++i) {
+        ck_a += buf[i];
+        ck_b += ck_a;
+    }
+    buf[6 + payload_len] = ck_a;
+    buf[7 + payload_len] = ck_b;
+    return payload_len + 8;
+}
+
 void setUp(void) {
     memset(&test_ctx, 0, sizeof(ubx_ctx_t));
     memset(&test_msg, 0, sizeof(ubx_msg_t));
@@ -508,4 +539,75 @@ TEST_CASE("Message handler - large payload handling", "[ubx][msg_handler]")
 
     TEST_ASSERT_EQUAL(ESP_OK, ret);
     TEST_ASSERT_EQUAL(MT_NAV_SAT, packet.ubx_msg_type);
+}
+
+TEST_CASE("Message handler - read skips mismatched ACK", "[ubx][msg_handler]")
+{
+    uint8_t wrong_ack[10];
+    uint8_t wanted_ack[10];
+    const uint8_t wrong_payload[2] = {0x06, 0x08};
+    const uint8_t wanted_payload[2] = {0x06, 0x01};
+
+    create_ubx_frame(wrong_ack, 0x05, 0x01, wrong_payload,
+                     sizeof(wrong_payload));
+    create_ubx_frame(wanted_ack, 0x05, 0x01, wanted_payload,
+                     sizeof(wanted_payload));
+    append_rx_bytes(wrong_ack, sizeof(wrong_ack));
+    append_rx_bytes(wanted_ack, sizeof(wanted_ack));
+
+    test_msg.navAck = (nav_ack_t)NAV_ACK_DEFAULT;
+    test_msg.navAck.msg_cls = 0x06;
+    test_msg.navAck.msg_id = 0x01;
+
+    ubx_msg_byte_ctx_t packet = {
+        .msg = (uint8_t *)&test_msg.navAck,
+        .msg_size = sizeof(nav_ack_t),
+        .msg_pos = 6,
+        .msg_match_to_pos = true,
+        .expect_ubx_msg = true,
+        .ubx_msg_type = MT_NAV_ACK,
+        .msg_type_handler = NULL,
+        .msg_ready_handler = msg_checksum_cb,
+        .ctx = &test_ctx,
+        .ubx_msg = &test_msg,
+    };
+
+    esp_err_t ret = read_ubx_msg(&test_ctx, &packet);
+
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL_HEX8(0x06, test_msg.navAck.msg_cls);
+    TEST_ASSERT_EQUAL_HEX8(0x01, test_msg.navAck.msg_id);
+}
+
+TEST_CASE("Message handler - read skips unsolicited NAV before MON-VER", "[ubx][msg_handler]")
+{
+    uint8_t nav_pvt_frame[100] = {0};
+    uint8_t mon_ver_frame[64] = {0};
+    uint8_t mon_ver_payload[40] = {0};
+    size_t nav_pvt_len;
+    size_t mon_ver_len;
+
+    nav_pvt_len = create_ubx_frame(nav_pvt_frame, 0x01, 0x07,
+                                   (const uint8_t[92]){0}, 92);
+    memcpy(mon_ver_payload, "ROM CORE 4.04", 13);
+    memcpy(mon_ver_payload + 30, "00190000", 8);
+    mon_ver_len = create_ubx_frame(mon_ver_frame, 0x0A, 0x04,
+                                   mon_ver_payload, sizeof(mon_ver_payload));
+
+    append_rx_bytes(nav_pvt_frame, nav_pvt_len);
+    append_rx_bytes(mon_ver_frame, mon_ver_len);
+
+    test_msg.none[0] = 0x0A;
+    test_msg.none[1] = 0x04;
+
+    ubx_msg_byte_ctx_t packet = UBX_MSG_BYTE_CTX_DEFAULT(test_msg);
+    packet.ctx = &test_ctx;
+
+    esp_err_t ret = read_ubx_msg(&test_ctx, &packet);
+
+    TEST_ASSERT_EQUAL(ESP_OK, ret);
+    TEST_ASSERT_EQUAL(MT_MON_VER, packet.ubx_msg_type);
+    TEST_ASSERT_EQUAL_HEX8(0x0A, test_msg.mon_ver.cls);
+    TEST_ASSERT_EQUAL_HEX8(0x04, test_msg.mon_ver.id);
+    TEST_ASSERT_EQUAL('0', test_msg.mon_ver.hwVersion[0]);
 }

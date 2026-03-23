@@ -70,6 +70,9 @@ static esp_err_t ubx_initial_read(struct ubx_ctx_s *ubx, bool get_hw);
 static esp_err_t ubx_cfg_send_m(struct ubx_ctx_s *ubx, uint8_t * msg, size_t msg_len, bool need_ack);
 esp_err_t send_ubx_cfg_msg(struct ubx_ctx_s *ubx, uint8_t cls, uint8_t id, const uint8_t * payload, size_t payload_len, bool need_ack);
 esp_err_t ubx_cfg_valset(struct ubx_ctx_s *ubx, const uint8_t * cfg, size_t payload_len, bool need_ack);
+esp_err_t ubx_cfg_valset_layers(struct ubx_ctx_s *ubx, const uint8_t *cfg,
+                     size_t payload_len, uint8_t layers,
+                     bool need_ack);
 esp_err_t ubx_cfg_get(struct ubx_ctx_s *ubx, struct ubx_msg_byte_ctx_s * ubx_packet);
 static esp_err_t ubx_uart_set_baud(struct ubx_ctx_s *ubx);
 static esp_err_t ubx_set_uart_baud_rate(struct ubx_ctx_s *ubx, int baud);

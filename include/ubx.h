@@ -69,6 +69,8 @@ typedef struct ubx_ctx_s {
     uint8_t hw_id[8];
     uint8_t prot_ver;
     uint8_t gnss_count;
+    uint8_t effective_output_rate;
+    uint32_t detected_boot_baud;
     /// UART event-driven infrastructure
     QueueHandle_t uart_event_queue;
     TaskHandle_t uart_event_task;
@@ -117,6 +119,8 @@ typedef struct ubx_ctx_s {
     .hw_id = {0,0,0,0,0,0},                           \
     .prot_ver = 0,                                   \
     .gnss_count = 0,                                 \
+    .effective_output_rate = UBX_OUTPUT_RATE_DEFAULT,\
+    .detected_boot_baud = 0,                         \
     .uart_event_queue = NULL,                        \
     .uart_event_task = NULL,                         \
     .rx_buffer = NULL,                               \
@@ -206,6 +210,7 @@ esp_err_t ubx_setup(ubx_ctx_t *ubx);
 
 // const char * ubx_chip_str(const ubx_ctx_t *ubx);
 const char * ubx_get_dev_str(void);
+uint8_t ubx_get_effective_output_rate(void);
 
 const char * ubx_baud_str(const ubx_ctx_t *ubx);
 

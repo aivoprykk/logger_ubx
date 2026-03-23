@@ -519,6 +519,18 @@ static esp_err_t ubx_read_frame(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t *ubx_pack
     return ESP_OK;
 }
 
+static bool ubx_packet_matches_expected(const ubx_msg_byte_ctx_t *ubx_packet,
+                                        const uint8_t *expected_prefix,
+                                        size_t expected_len) {
+    if (expected_len == 0) {
+        return true;
+    }
+    if (!ubx_packet || !ubx_packet->msg || ubx_packet->msg_size < expected_len) {
+        return false;
+    }
+    return memcmp(ubx_packet->msg, expected_prefix, expected_len) == 0;
+}
+
 esp_err_t read_ubx_msg(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
     if(!ubx_packet) return ESP_ERR_INVALID_ARG;
     if(!ubx_dev) return ESP_ERR_INVALID_ARG;
@@ -526,6 +538,19 @@ esp_err_t read_ubx_msg(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
 
     const uint16_t timeout = MSG_READ_TIMEOUT;
     const uint32_t deadline = get_millis() + timeout;
+    uint8_t expected_prefix[16] = {0};
+    size_t expected_len = 0;
+
+    if (ubx_packet->msg_match_to_pos && ubx_packet->msg_pos > 0) {
+        expected_len = ubx_packet->msg_pos;
+        if (expected_len > ubx_packet->msg_size) {
+            expected_len = ubx_packet->msg_size;
+        }
+        if (expected_len > sizeof(expected_prefix)) {
+            expected_len = sizeof(expected_prefix);
+        }
+        memcpy(expected_prefix, ubx_packet->msg, expected_len);
+    }
 
     // Sniff mode: when expect_ubx_msg==false we just harvest whatever is in the UART RX buffer
     // without trying to parse UBX framing. This is needed during initial autobaud when the
@@ -548,6 +573,11 @@ esp_err_t read_ubx_msg(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
             if (ret == ESP_ERR_INVALID_CRC || ret == ESP_ERR_NOT_SUPPORTED) {
                 continue; // Try to resync to the next frame within the same deadline
             }
+        }
+
+        if (!ubx_packet_matches_expected(ubx_packet, expected_prefix,
+                                         expected_len)) {
+            continue;
         }
 
 #if (C_LOG_LEVEL == LOG_TRACE_NUM)
@@ -687,7 +717,9 @@ esp_err_t send_ubx_cfg_msg(ubx_ctx_t *ubx_dev, uint8_t cls, uint8_t id, const ui
     return ret;
 }
 
-esp_err_t ubx_cfg_valset(ubx_ctx_t *ubx_dev, const uint8_t * payload, size_t len, bool need_ack) {
+esp_err_t ubx_cfg_valset_layers(ubx_ctx_t *ubx_dev, const uint8_t *payload,
+					size_t len, uint8_t layers,
+					bool need_ack) {
     FUNC_ENTRYD(TAG);
     if(ubx_dev->hw_type < UBX_TYPE_M9)
         return ESP_ERR_INVALID_ARG;
@@ -697,11 +729,15 @@ esp_err_t ubx_cfg_valset(ubx_ctx_t *ubx_dev, const uint8_t * payload, size_t len
         ELOG(TAG, "[%s] heap_caps_calloc failed", __FUNCTION__);
         return ESP_ERR_NO_MEM;
     }
-    memcpy(msg, (const uint8_t[]){0x01, 0x01, 0x00, 0x00}, 4);
+    memcpy(msg, (const uint8_t[]){0x01, layers, 0x00, 0x00}, 4);
     memcpy(msg+4, payload, len);
     esp_err_t ret = send_ubx_cfg_msg(ubx_dev, CLS_CFG, CFG_VALSET, msg, len + 4, need_ack);
     heap_caps_free(msg);
     return ret;
+}
+
+esp_err_t ubx_cfg_valset(ubx_ctx_t *ubx_dev, const uint8_t * payload, size_t len, bool need_ack) {
+    return ubx_cfg_valset_layers(ubx_dev, payload, len, 0x01, need_ack);
 }
 
 esp_err_t ubx_cfg_get(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
