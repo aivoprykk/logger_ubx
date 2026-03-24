@@ -1557,6 +1557,9 @@ static esp_err_t ubx_set_uart_baud_rate(ubx_ctx_t *ubx, int baud) {
 	}
 	ret = send_ubx_cfg_msg(ubx, CLS_CFG, CFG_PRT, legacy_payload,
 					   legacy_payload_len, false);
+	if (ret != ESP_OK) {
+		return ret;
+	}
 done:
 	g_rtc_config.ubx.baud = baud;
 	ubx->uart_conf.baud_rate = baud;

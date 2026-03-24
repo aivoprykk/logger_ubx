@@ -276,6 +276,7 @@ static void ubx_uart_event_task(void *arg) {
 // Initialize event-driven UART infrastructure
 esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
     FUNC_ENTRY(TAG);
+    esp_err_t ret = ESP_OK;
 
     if (!ctx) return ESP_ERR_INVALID_ARG;
 
@@ -320,16 +321,14 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
     ctx->msg_ready = xSemaphoreCreateCounting(UBX_MSG_READY_DEPTH, 0);
     if (!ctx->msg_ready) {
         ELOG(TAG, "[%s] Failed to create msg_ready semaphore", __FUNCTION__);
-        vSemaphoreDelete(ctx->rx_buf_mutex);
-        ctx->rx_buffer = NULL;
-        ctx->rx_buf_mutex = NULL;
-        return ESP_ERR_NO_MEM;
+        ret = ESP_ERR_NO_MEM;
+        goto fail;
     }
 
     // UART event queue already created during uart_driver_install
     // Just create the event handler task
     ctx->uart_event_stop_requested = false;
-    BaseType_t ret = xTaskCreatePinnedToCore(
+    BaseType_t task_ret = xTaskCreatePinnedToCore(
         ubx_uart_event_task,
         "ubx_uart_evt",
         UBX_UART_TASK_STACK_SIZE,
@@ -339,16 +338,36 @@ esp_err_t ubx_uart_event_init(ubx_ctx_t *ctx) {
         1   // Core 1 to separate from WiFi on Core 0
     );
 
-    if (ret != pdPASS) {
+    if (task_ret != pdPASS) {
         ELOG(TAG, "[%s] Failed to create UART event task", __FUNCTION__);
-        vSemaphoreDelete(ctx->rx_buf_mutex);
-        ctx->rx_buffer = NULL;
-        ctx->rx_buf_mutex = NULL;
-        return ESP_FAIL;
+        ret = ESP_FAIL;
+        goto fail;
     }
 
     ILOG(TAG, "[%s] Event-driven UART initialized (buffer: %zu bytes)", __FUNCTION__, ctx->rx_buf_size);
     return ESP_OK;
+
+fail:
+    if (ctx->msg_ready) {
+        vSemaphoreDelete(ctx->msg_ready);
+        ctx->msg_ready = NULL;
+    }
+    if (ctx->rx_buf_mutex) {
+        vSemaphoreDelete(ctx->rx_buf_mutex);
+        ctx->rx_buf_mutex = NULL;
+    }
+    if (ctx->uart_tmp_buf) {
+        heap_caps_free(ctx->uart_tmp_buf);
+        ctx->uart_tmp_buf = NULL;
+    }
+    if (ctx->rx_buffer) {
+        heap_caps_free(ctx->rx_buffer);
+        ctx->rx_buffer = NULL;
+    }
+    ctx->rx_buf_size = 0;
+    ctx->rx_buf_head = 0;
+    ctx->rx_buf_tail = 0;
+    return ret;
 }
 
 // Cleanup event-driven UART infrastructure

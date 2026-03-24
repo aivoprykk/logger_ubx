@@ -674,28 +674,32 @@ esp_err_t write_ubx_msg(int uart_num, uint8_t *msg, size_t size, bool need_check
 static esp_err_t ubx_cfg_send_m(ubx_ctx_t *ubx_dev, uint8_t * msg, size_t msg_len, bool need_ack) {
     FUNC_ENTRYD(TAG);
     DMEAS_START();
-    esp_err_t ret = ESP_OK;
-    if (ubx_lock(500)) {
-        if (need_ack) {
-            // Drop stale boot/runtime traffic so the following ACK wait starts on a clean stream.
+    esp_err_t ret = ESP_ERR_TIMEOUT;
+    if (!ubx_lock(500)) {
+        WLOG(TAG, "[%s] ubx_lock timeout", __FUNCTION__);
+        DMEAS_END(TAG);
+        return ret;
+    }
+
+    if (need_ack) {
+        // Drop stale boot/runtime traffic so the following ACK wait starts on a clean stream.
+        ubx_rx_reset(ubx_dev, true);
+    }
+    ret = write_ubx_msg(ubx_dev->uart_num, msg, msg_len, true);
+    if (ret != ESP_OK) {
+        ELOG(TAG, "[%s] write_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
+        goto done;
+    }
+    if(need_ack) {
+        ret = ack_status(ubx_dev, *(msg+2), *(msg+3));
+        if (ret == ESP_ERR_TIMEOUT) {
+            WLOG(TAG, "[%s] ACK timeout for cls=0x%02x id=0x%02x, resetting RX state",
+                 __FUNCTION__, *(msg + 2), *(msg + 3));
             ubx_rx_reset(ubx_dev, true);
         }
-        ret = write_ubx_msg(ubx_dev->uart_num, msg, msg_len, true);
-        if (ret != ESP_OK) {
-            ELOG(TAG, "[%s] write_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
-            goto done;
-        }
-        if(need_ack) {
-            ret = ack_status(ubx_dev, *(msg+2), *(msg+3));
-            if (ret == ESP_ERR_TIMEOUT) {
-                WLOG(TAG, "[%s] ACK timeout for cls=0x%02x id=0x%02x, resetting RX state",
-                     __FUNCTION__, *(msg + 2), *(msg + 3));
-                ubx_rx_reset(ubx_dev, true);
-            }
-        }
-    done:
-       ubx_unlock();
     }
+done:
+    ubx_unlock();
     DMEAS_END(TAG);
     return ret;
 }
@@ -754,13 +758,20 @@ esp_err_t ubx_cfg_get(ubx_ctx_t *ubx_dev, ubx_msg_byte_ctx_t * ubx_packet) {
     DMEAS_START();
     // assert(ubx_packet && ubx_dev);
     esp_err_t ret = send_ubx_cfg_msg(ubx_dev, *ubx_packet->msg, *(ubx_packet->msg+1), NULL, 0, false);
-    if(ubx_lock(500)) {
-        ret = read_ubx_msg(ubx_dev, ubx_packet); // this msg is without ubx header as ubx_msg_t parts start with class and id
-        if (ret != ESP_OK) {
-            ELOG(TAG, "[%s] read_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
-        }
-        ubx_unlock();
+    if (ret != ESP_OK) {
+        DMEAS_END(TAG);
+        return ret;
     }
+    if (!ubx_lock(500)) {
+        WLOG(TAG, "[%s] ubx_lock timeout", __FUNCTION__);
+        DMEAS_END(TAG);
+        return ESP_ERR_TIMEOUT;
+    }
+    ret = read_ubx_msg(ubx_dev, ubx_packet); // this msg is without ubx header as ubx_msg_t parts start with class and id
+    if (ret != ESP_OK) {
+        ELOG(TAG, "[%s] read_ubx_msg failed: %s", __FUNCTION__, esp_err_to_name(ret));
+    }
+    ubx_unlock();
     DMEAS_END(TAG);
     return ret;
 }
